@@ -24,25 +24,34 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+// Main Swing application window for the MotorPH payroll system.
 public class MotorPH extends JFrame {
     
+    // Card-based navigation between login/admin/employee views.
     private CardLayout cardLayout;
     private JPanel mainContainer;
+    // Tracks the current user session within the UI.
     private String currentLoggedInEmployeeId = "";
 
+    // Static credentials for admin access.
     private static final String ADMIN_ID = "999"; 
     private static final String ADMIN_PASS = "admin123";
+    // Path to the local Excel file used as the database.
     private static final String EXCEL_FILE_PATH = "MotorPH_EmployeeData.xlsx";
+    // Shared formatter for consistent cell-to-string conversion.
     private static final DataFormatter FORMATTER = new DataFormatter();
     
+    // UI theme colors.
     private static final Color BG_DARK = new Color(18, 18, 18);
     private static final Color PANEL_DARK = new Color(30, 30, 30);
     private static final Color TEXT_LIGHT = new Color(240, 240, 240);
     private static final Color BTN_ACCENT = new Color(70, 70, 70);
     
+    // HTML wrapper used for report dialogs.
     private static final String HTML_HEADER = "<html><body style='font-family: Arial, sans-serif; background-color: #1E1E1E; color: #F0F0F0; margin: 10px;'>";
     private static final String HTML_FOOTER = "</body></html>";
 
+    // Application constructor that initializes the main window and cards.
     public MotorPH() {
         setTitle("MotorPH Payroll System");
         
@@ -51,6 +60,7 @@ public class MotorPH extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setResizable(true); 
         
+        // Ensure JOptionPane dialogs match the dark theme.
         UIManager.put("OptionPane.background", PANEL_DARK);
         UIManager.put("Panel.background", PANEL_DARK);
         UIManager.put("OptionPane.messageForeground", TEXT_LIGHT);
@@ -58,6 +68,7 @@ public class MotorPH extends JFrame {
         cardLayout = new CardLayout();
         mainContainer = new JPanel(cardLayout);
 
+        // Register the main screens.
         mainContainer.add(createLoginScreen(), "LOGIN");
         mainContainer.add(createAdminDashboard(), "ADMIN_DASHBOARD");
         mainContainer.add(createEmployeeDashboard(), "EMPLOYEE_DASHBOARD");
@@ -66,6 +77,7 @@ public class MotorPH extends JFrame {
         cardLayout.show(mainContainer, "LOGIN");
     }
 
+    // Builds the login screen UI and validation logic.
     private JPanel createLoginScreen() {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBackground(BG_DARK); 
@@ -99,16 +111,19 @@ public class MotorPH extends JFrame {
         gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2;
         panel.add(loginBtn, gbc);
 
+        // Attempt login; route to admin or employee dashboard.
         loginBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 try {
                     String userId = idField.getText().trim();
 
+                    // Basic input validation.
                     if (userId.isEmpty()) {
                         throw new IllegalArgumentException("Employee ID cannot be blank!");
                     }
 
+                    // Admin login path requires a password prompt.
                     if (userId.equals(ADMIN_ID)) {
                         JPasswordField pf = new JPasswordField();
                         pf.setBackground(PANEL_DARK);
@@ -120,6 +135,7 @@ public class MotorPH extends JFrame {
                         if (okCxl == JOptionPane.OK_OPTION) {
                             String pass = new String(pf.getPassword());
                             if (pass.equals(ADMIN_PASS)) {
+                                // Successful admin login.
                                 currentLoggedInEmployeeId = ADMIN_ID; 
                                 idField.setText(""); 
                                 cardLayout.show(mainContainer, "ADMIN_DASHBOARD"); 
@@ -128,6 +144,7 @@ public class MotorPH extends JFrame {
                             }
                         }
                     } else {
+                        // Employee login validates ID against the database.
                         if (checkEmployeeExists(userId)) {
                             currentLoggedInEmployeeId = userId; 
                             idField.setText(""); 
@@ -149,6 +166,7 @@ public class MotorPH extends JFrame {
         return panel;
     }
 
+    // Builds the administrator dashboard and actions.
     private JPanel createAdminDashboard() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(BG_DARK);
@@ -225,6 +243,7 @@ public class MotorPH extends JFrame {
 
         panel.add(buttonPanel, BorderLayout.CENTER);
         
+        // Clear session and return to login.
         logoutBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -236,11 +255,13 @@ public class MotorPH extends JFrame {
             }
         });
 
+        // Adds a new employee row to the Excel database.
         addEmpBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 String newId = JOptionPane.showInputDialog(panel, "Enter New Employee ID:");
                 if (newId != null && !newId.trim().isEmpty()) {
+                    // Prevent duplicate IDs before writing.
                     if (checkEmployeeExists(newId)) {
                         JOptionPane.showMessageDialog(panel, "Employee ID already exists!", "Error", JOptionPane.ERROR_MESSAGE);
                         return;
@@ -260,6 +281,7 @@ public class MotorPH extends JFrame {
             }
         });
 
+        // Updates an employee's status column in Excel.
         editEmpBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -282,6 +304,7 @@ public class MotorPH extends JFrame {
             }
         });
 
+        // Deletes an employee record after confirmation.
         deleteEmpBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -304,6 +327,7 @@ public class MotorPH extends JFrame {
             }
         });
 
+        // Generates and displays the full roster report.
         viewAllEmpBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -312,6 +336,7 @@ public class MotorPH extends JFrame {
             }
         });
 
+        // Generates payroll report for a single employee.
         processOneBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -326,6 +351,7 @@ public class MotorPH extends JFrame {
             }
         });
 
+        // Generates payroll report for all employees.
         processAllBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -333,6 +359,7 @@ public class MotorPH extends JFrame {
             }
         });
 
+        // Placeholder for future payroll editing feature.
         editPayrollBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -340,6 +367,7 @@ public class MotorPH extends JFrame {
             }
         });
 
+        // Verifies the Excel file exists and is reachable.
         databaseCheckBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -359,6 +387,7 @@ public class MotorPH extends JFrame {
         return panel;
     }
 
+    // Builds the employee self-service dashboard.
     private JPanel createEmployeeDashboard() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(BG_DARK);
@@ -405,6 +434,7 @@ public class MotorPH extends JFrame {
 
         panel.add(buttonPanel, BorderLayout.CENTER);
 
+        // Clear session and return to login.
         logoutBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -416,6 +446,7 @@ public class MotorPH extends JFrame {
             }
         });
 
+        // Load and show profile and government IDs.
         viewProfileBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -424,6 +455,7 @@ public class MotorPH extends JFrame {
             }
         });
 
+        // Load and show employee payroll records.
         viewPayrollBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -431,6 +463,7 @@ public class MotorPH extends JFrame {
             }
         });
 
+        // Simple leave request capture (no persistence).
         leaveRequestBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -450,6 +483,7 @@ public class MotorPH extends JFrame {
         return panel;
     }
 
+    // Appends a new employee row to the Excel database.
     private static boolean saveNewEmployee(String id, String fName, String lName) {
         try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
              Workbook workbook = new XSSFWorkbook(fis)) {
@@ -460,6 +494,7 @@ public class MotorPH extends JFrame {
             newRow.createCell(0).setCellValue(id);
             newRow.createCell(1).setCellValue(lName);
             newRow.createCell(2).setCellValue(fName);
+            // Default status on creation.
             newRow.createCell(10).setCellValue("Probationary"); 
             
             try (FileOutputStream fos = new FileOutputStream(new File(EXCEL_FILE_PATH))) {
@@ -471,6 +506,7 @@ public class MotorPH extends JFrame {
         }
     }
 
+    // Updates the status field for a given employee ID.
     private static boolean updateEmployeeStatus(String id, String newStatus) {
         try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
              Workbook workbook = new XSSFWorkbook(fis)) {
@@ -492,6 +528,7 @@ public class MotorPH extends JFrame {
         }
     }
 
+    // Removes a row for the specified employee ID.
     private static boolean removeEmployeeRecord(String id) {
         try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
              Workbook workbook = new XSSFWorkbook(fis)) {
@@ -516,10 +553,12 @@ public class MotorPH extends JFrame {
         }
     }
 
+    // Displays HTML content in a scrollable dialog.
     private void showReportWindow(String title, String htmlContent) {
         JEditorPane editorPane = new JEditorPane("text/html", htmlContent);
         editorPane.setEditable(false);
         editorPane.setBackground(BG_DARK);
+        // Start at the top of the report.
         editorPane.setCaretPosition(0); 
 
         JScrollPane scrollPane = new JScrollPane(editorPane);
@@ -529,6 +568,7 @@ public class MotorPH extends JFrame {
         JOptionPane.showMessageDialog(this, scrollPane, title, JOptionPane.PLAIN_MESSAGE);
     }
 
+    // Prompts for a date filter and shows the payroll report for one employee.
     private void handlePayrollFilterRequest(JPanel parentPanel, String empId) {
         String[] options = {"All Time", "Latest Month", "Previous Month", "Custom Date"};
         int choice = JOptionPane.showOptionDialog(parentPanel, "Select the period you want to view:", 
@@ -537,6 +577,7 @@ public class MotorPH extends JFrame {
                      
         String filter = "ALL";
         
+        // Map UI selection to internal filter value.
         if (choice == 1) {
             filter = "LATEST";
         } else if (choice == 2) {
@@ -562,6 +603,7 @@ public class MotorPH extends JFrame {
         showReportWindow(windowTitle, HTML_HEADER + report + HTML_FOOTER);
     }
 
+    // Prompts for a date filter and shows the payroll report for all employees.
     private void handleBulkPayrollFilterRequest(JPanel parentPanel) {
         String[] options = {"All Time", "Latest Month", "Previous Month", "Custom Date"};
         int choice = JOptionPane.showOptionDialog(parentPanel, "Select the period for the bulk report:", 
@@ -570,6 +612,7 @@ public class MotorPH extends JFrame {
                      
         String filter = "ALL";
         
+        // Map UI selection to internal filter value.
         if (choice == 1) {
             filter = "LATEST";
         } else if (choice == 2) {
@@ -595,6 +638,7 @@ public class MotorPH extends JFrame {
         showReportWindow(windowTitle, HTML_HEADER + report + HTML_FOOTER);
     }
 
+    // Generates HTML payroll rows for an employee across one or more periods.
     private String processPayrollLoop(String id, String periodFilter) {
         StringBuilder sb = new StringBuilder();
         
@@ -604,6 +648,7 @@ public class MotorPH extends JFrame {
             Sheet empSheet = workbook.getSheet("Employee Details");
             Sheet attSheet = workbook.getSheet("Attendance Record");
             
+            // Locate the employee master record.
             Row row = null;
             for (Row r : empSheet) {
                 if (getCellValueAsString(r.getCell(0)).equals(id)) {
@@ -616,6 +661,7 @@ public class MotorPH extends JFrame {
                 return "<p style='color:red;'>Employee ID not found.</p>";
             }
 
+            // Determine hourly-rate column from header (fallback to column 18).
             int hourlyColIndex = 18; 
             Row headerRow = empSheet.getRow(0);
             if (headerRow != null) {
@@ -630,6 +676,7 @@ public class MotorPH extends JFrame {
             FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
             List<String> activePeriods = getUniquePeriods(attSheet, id);
             
+            // Translate friendly filters to a single period when needed.
             if (periodFilter.equals("LATEST")) {
                 if (activePeriods.size() > 0) {
                     periodFilter = activePeriods.get(activePeriods.size() - 1); 
@@ -642,6 +689,7 @@ public class MotorPH extends JFrame {
                 }
             }
 
+            // If a single period is requested, narrow the list.
             if (!periodFilter.equals("ALL")) {
                 List<String> filteredList = new ArrayList<>();
                 if (activePeriods.contains(periodFilter)) {
@@ -672,11 +720,13 @@ public class MotorPH extends JFrame {
                 double totalHours = h1 + h2;
 
                 if (totalHours > 0) {
+                    // If hourly rate is stored as monthly, normalize to hourly.
                     double hourlyRate = getNumericSafe(row.getCell(hourlyColIndex), evaluator); 
                     if (hourlyRate > 1000) {
                         hourlyRate = hourlyRate / 160;
                     }
 
+                    // Ensure a basic salary value for deductions and taxes.
                     double basicSalary = getNumericSafe(row.getCell(13), evaluator); 
                     if (basicSalary <= 0) {
                         basicSalary = hourlyRate * 160;
@@ -686,6 +736,7 @@ public class MotorPH extends JFrame {
                     double gross2 = hourlyRate * h2;
                     double totalGross = gross1 + gross2;
                     
+                    // Standard government deductions.
                     double sss = calculateSSS(basicSalary);
                     double philHealth = basicSalary * 0.025; 
                     if (philHealth > 2500.00) {
@@ -697,9 +748,11 @@ public class MotorPH extends JFrame {
                     double taxableIncome = totalGross - totalGovtDeductions;
                     double tax = calculateTax(taxableIncome);
                     
+                    // Apply deductions on second cutoff (simplified business rule).
                     double net1 = gross1; 
                     double net2 = gross2 - (totalGovtDeductions + tax);
                     
+                    // If deductions exceed second cutoff, carry back to first.
                     if (net2 < 0) {
                         net1 = net1 + net2; 
                         net2 = 0;           
@@ -731,6 +784,7 @@ public class MotorPH extends JFrame {
         return sb.toString();
     }
 
+    // Generates a bulk HTML report for all employees in a period.
     private String processAllEmployees(String periodFilter) {
         StringBuilder sb = new StringBuilder();
         try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
@@ -756,6 +810,7 @@ public class MotorPH extends JFrame {
         return sb.toString();
     }
 
+    // Builds an HTML table for the company employee roster.
     private String getAllEmployeeProfilesString() {
         StringBuilder sb = new StringBuilder();
         
@@ -795,12 +850,14 @@ public class MotorPH extends JFrame {
         return sb.toString();
     }
 
+    // Builds an HTML profile summary for a single employee ID.
     private String getEmployeeProfileString(String searchId) {
         StringBuilder sb = new StringBuilder();
         try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
              Workbook workbook = new XSSFWorkbook(fis)) {
             Sheet sheet = workbook.getSheet("Employee Details");
             
+            // Locate the employee record.
             Row myRow = null;
             for (Row r : sheet) {
                 if (getCellValueAsString(r.getCell(0)).equals(searchId)) {
@@ -811,6 +868,7 @@ public class MotorPH extends JFrame {
             
             if (myRow != null) {
                 
+                // Extract profile fields in fixed column order.
                 String idNum      = getCellValueAsString(myRow.getCell(0));
                 String firstName  = getCellValueAsString(myRow.getCell(1));
                 String lastName   = getCellValueAsString(myRow.getCell(2));
@@ -852,6 +910,7 @@ public class MotorPH extends JFrame {
         return sb.toString();
     }
 
+    // Checks if an employee ID exists in the Excel database.
     private static boolean checkEmployeeExists(String id) {
         try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
              Workbook workbook = new XSSFWorkbook(fis)) {
@@ -865,6 +924,7 @@ public class MotorPH extends JFrame {
         return false;
     }
 
+    // Extracts distinct MM/YYYY periods from attendance records.
     private static List<String> getUniquePeriods(Sheet sheet, String id) {
         Set<String> periods = new LinkedHashSet<>();
         for (Row row : sheet) {
@@ -886,6 +946,7 @@ public class MotorPH extends JFrame {
         return new ArrayList<>(periods);
     }
 
+    // Totals hours for an employee within a half-month range.
     private static double calculateHours(Sheet sheet, String id, String targetPeriod, int startDay, int endDay) {
         double total = 0;
         LocalTime shiftStart = LocalTime.of(8, 0);
@@ -910,9 +971,11 @@ public class MotorPH extends JFrame {
                                 LocalTime timeIn = parseTime(getCellValueAsString(row.getCell(4)));
                                 LocalTime timeOut = parseTime(getCellValueAsString(row.getCell(5)));
                                 
+                                // Apply grace period for time-in.
                                 if (timeIn.isBefore(shiftStart) || (timeIn.isAfter(shiftStart) && timeIn.isBefore(grace))) {
                                     timeIn = shiftStart;
                                 }
+                                // Cap time-out at shift end.
                                 if (timeOut.isAfter(shiftEnd)) {
                                     timeOut = shiftEnd;
                                 }
@@ -920,6 +983,7 @@ public class MotorPH extends JFrame {
                                 if (timeOut.isAfter(timeIn)) {
                                     double duration = Duration.between(timeIn, timeOut).toMinutes() / 60.0;
                                     if (duration > 5) {
+                                        // Deduct one hour for a standard lunch break.
                                         duration = duration - 1.0; 
                                     }
                                     total = total + duration;
@@ -933,6 +997,7 @@ public class MotorPH extends JFrame {
         return total;
     }
 
+    // Reads numeric values safely from a cell, including formulas and text.
     private static double getNumericSafe(Cell cell, FormulaEvaluator evaluator) {
         if (cell == null) {
             return 0.0;
@@ -943,6 +1008,7 @@ public class MotorPH extends JFrame {
             } else if (cell.getCellType() == CellType.FORMULA) {
                 return evaluator.evaluate(cell).getNumberValue();
             }
+            // Fallback: parse formatted strings and strip non-numeric symbols.
             String val = FORMATTER.formatCellValue(cell, evaluator).replace(",", "").replaceAll("[^\\d.]", "");
             if (val.isEmpty()) {
                 return 0.0;
@@ -954,6 +1020,7 @@ public class MotorPH extends JFrame {
         }
     }
 
+    // Computes SSS deduction using a simplified bracket table.
     private static double calculateSSS(double salary) {
         if (salary <= 3250) return 135.00;
         if (salary >= 24750) return 1125.00;
@@ -961,6 +1028,7 @@ public class MotorPH extends JFrame {
         return 135.00 + (steps * 22.50);
     }
 
+    // Computes withholding tax using simplified brackets.
     private static double calculateTax(double taxableIncome) {
         if (taxableIncome <= 20833) return 0;
         if (taxableIncome <= 33333) return (taxableIncome - 20833) * 0.15;
@@ -969,6 +1037,7 @@ public class MotorPH extends JFrame {
         return 33541.67 + (taxableIncome - 166667) * 0.30;
     }
 
+    // Parses time strings with or without AM/PM, falling back to 8:00 AM.
     private static LocalTime parseTime(String t) {
         try {
             t = t.trim().toUpperCase();
@@ -982,6 +1051,7 @@ public class MotorPH extends JFrame {
         }
     }
 
+    // Converts any cell to a trimmed string for comparisons and display.
     private static String getCellValueAsString(Cell cell) {
         if (cell == null) {
             return "";
@@ -989,10 +1059,12 @@ public class MotorPH extends JFrame {
         return FORMATTER.formatCellValue(cell).trim();
     }
 
+    // Application entry point.
     public static void main(String[] args) {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
+                // Create and show the main UI on the EDT.
                 new MotorPH().setVisible(true);
             }
         });
