@@ -221,11 +221,6 @@ public class MotorPH extends JFrame {
         deleteEmpBtn.setBackground(PANEL_DARK);
         deleteEmpBtn.setForeground(new Color(255, 100, 100));
         
-        JButton editPayrollBtn = new JButton("Edit Payroll Records [WIP]"); 
-        editPayrollBtn.setFont(btnFont);
-        editPayrollBtn.setBackground(PANEL_DARK);
-        editPayrollBtn.setForeground(TEXT_LIGHT);
-        
         JButton databaseCheckBtn = new JButton("Check Database Connection");
         databaseCheckBtn.setFont(btnFont);
         databaseCheckBtn.setBackground(PANEL_DARK);
@@ -237,7 +232,6 @@ public class MotorPH extends JFrame {
         buttonPanel.add(addEmpBtn);    
         buttonPanel.add(editEmpBtn);   
         buttonPanel.add(deleteEmpBtn); 
-        buttonPanel.add(editPayrollBtn);
         buttonPanel.add(databaseCheckBtn);
 
         panel.add(buttonPanel, BorderLayout.CENTER);
@@ -355,14 +349,6 @@ public class MotorPH extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 handleBulkPayrollFilterRequest(panel);
-            }
-        });
-
-        // Placeholder for future payroll editing feature.
-        editPayrollBtn.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                JOptionPane.showMessageDialog(panel, "This feature is currently under development.", "Work In Progress", JOptionPane.INFORMATION_MESSAGE);
             }
         });
 
