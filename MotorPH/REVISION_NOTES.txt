@@ -17,3 +17,9 @@ Batch 4B Update:
 - Moved safe Excel operations from MotorPH.java into ExcelRepository.
 - Moved saveNewEmployee, updateEmployeeStatus, removeEmployeeRecord, checkEmployeeExists, getNumericSafe, and getCellValueAsString.
 - Confirmed roster, add employee, duplicate check, and delete employee still work.
+
+Batch 4C Update:
+- Moved getAllEmployeeProfilesString and getEmployeeProfileString into ExcelRepository.
+- MotorPH.java now calls ExcelRepository for employee roster and profile retrieval.
+- Confirmed employee roster/profile viewing still works after the move.
+- Payroll loop/report methods were intentionally left in MotorPH.java because they still mix payroll processing and report formatting.
