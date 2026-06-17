@@ -1,0 +1,19 @@
+Revision notes
+
+We will address the instructor feedback by separating responsibilities in the
+MotorPH payroll system.
+
+Planned organization:
+- model: payroll data classes and simple domain objects
+- service: payroll calculations and business rules
+- repository: Excel file reading and writing logic
+- ui: Java Swing GUI logic
+
+For this setup step, MotorPH.java remains in its current location and existing
+program behavior is unchanged.
+
+Batch 4B Update:
+- Created ExcelRepository under repository package.
+- Moved safe Excel operations from MotorPH.java into ExcelRepository.
+- Moved saveNewEmployee, updateEmployeeStatus, removeEmployeeRecord, checkEmployeeExists, getNumericSafe, and getCellValueAsString.
+- Confirmed roster, add employee, duplicate check, and delete employee still work.

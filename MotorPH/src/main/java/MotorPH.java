@@ -7,6 +7,8 @@
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import repository.ExcelRepository;
+import service.PayrollService;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.Font;  
@@ -15,7 +17,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream; 
+import java.io.FileOutputStream;
 import java.time.Duration;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -38,9 +40,6 @@ public class MotorPH extends JFrame {
     private static final String ADMIN_PASS = "admin123";
     // Path to the local Excel file used as the database.
     private static final String EXCEL_FILE_PATH = "MotorPH_EmployeeData.xlsx";
-    // Shared formatter for consistent cell-to-string conversion.
-    private static final DataFormatter FORMATTER = new DataFormatter();
-    
     // UI theme colors.
     private static final Color BG_DARK = new Color(18, 18, 18);
     private static final Color PANEL_DARK = new Color(30, 30, 30);
@@ -737,7 +736,7 @@ public class MotorPH extends JFrame {
                     double totalGross = gross1 + gross2;
                     
                     // Standard government deductions.
-                    double sss = calculateSSS(basicSalary);
+                    double sss = PayrollService.calculateSSS(basicSalary);
                     double philHealth = basicSalary * 0.025; 
                     if (philHealth > 2500.00) {
                         philHealth = 2500.00; 
@@ -746,7 +745,7 @@ public class MotorPH extends JFrame {
                     
                     double totalGovtDeductions = sss + philHealth + pagIbig;
                     double taxableIncome = totalGross - totalGovtDeductions;
-                    double tax = calculateTax(taxableIncome);
+                    double tax = PayrollService.calculateTax(taxableIncome);
                     
                     // Apply deductions on second cutoff (simplified business rule).
                     double net1 = gross1; 
@@ -1009,7 +1008,7 @@ public class MotorPH extends JFrame {
                 return evaluator.evaluate(cell).getNumberValue();
             }
             // Fallback: parse formatted strings and strip non-numeric symbols.
-            String val = FORMATTER.formatCellValue(cell, evaluator).replace(",", "").replaceAll("[^\\d.]", "");
+            String val = ExcelRepository.getCellValueAsString(cell).replace(",", "").replaceAll("[^\\d.]", "");
             if (val.isEmpty()) {
                 return 0.0;
             } else {
@@ -1018,23 +1017,6 @@ public class MotorPH extends JFrame {
         } catch (Exception e) { 
             return 0.0; 
         }
-    }
-
-    // Computes SSS deduction using a simplified bracket table.
-    private static double calculateSSS(double salary) {
-        if (salary <= 3250) return 135.00;
-        if (salary >= 24750) return 1125.00;
-        int steps = (int)((salary - 3250 - 0.01) / 500) + 1;
-        return 135.00 + (steps * 22.50);
-    }
-
-    // Computes withholding tax using simplified brackets.
-    private static double calculateTax(double taxableIncome) {
-        if (taxableIncome <= 20833) return 0;
-        if (taxableIncome <= 33333) return (taxableIncome - 20833) * 0.15;
-        if (taxableIncome <= 66667) return 1875 + (taxableIncome - 33333) * 0.20;
-        if (taxableIncome <= 166667) return 8541.67 + (taxableIncome - 66667) * 0.25;
-        return 33541.67 + (taxableIncome - 166667) * 0.30;
     }
 
     // Parses time strings with or without AM/PM, falling back to 8:00 AM.
@@ -1056,7 +1038,7 @@ public class MotorPH extends JFrame {
         if (cell == null) {
             return "";
         }
-        return FORMATTER.formatCellValue(cell).trim();
+        return ExcelRepository.getCellValueAsString(cell);
     }
 
     // Application entry point.
