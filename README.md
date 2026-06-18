@@ -40,6 +40,15 @@ mvn exec:java -Dexec.mainClass=MotorPH
 - Apache POI (Excel read/write)
 - Maven
 
+## Revision Notes / Code Structure Improvements
+- Added model classes: `Employee`, `AttendanceRecord`, and `PayrollResult`.
+- Added `PayrollService` to separate payroll calculations from the main GUI class.
+- Added `ExcelRepository` to handle Excel-based employee data operations.
+- Removed duplicate Excel helper and CRUD methods from `MotorPH.java`.
+- Removed the unfinished `Edit Payroll Records [WIP]` feature.
+- Added `.gitignore` entries to avoid tracking compiled `target/` and `.class` files.
+- `MotorPH.java` still handles the Swing UI and main workflow, but the project is now more modular than before. The system has not been fully refactored.
+
 ## Group Members and Roles
 - Xyrus Ezekiel Cuenca — UI/UX Designer & Developer
 - Albert Joaquin Geronimo — UI/UX Designer & Developer
