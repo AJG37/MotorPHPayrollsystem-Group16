@@ -17,7 +17,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.time.Duration;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -144,7 +143,7 @@ public class MotorPH extends JFrame {
                         }
                     } else {
                         // Employee login validates ID against the database.
-                        if (checkEmployeeExists(userId)) {
+                        if (ExcelRepository.checkEmployeeExists(userId)) {
                             currentLoggedInEmployeeId = userId; 
                             idField.setText(""); 
                             cardLayout.show(mainContainer, "EMPLOYEE_DASHBOARD");
@@ -255,7 +254,7 @@ public class MotorPH extends JFrame {
                 String newId = JOptionPane.showInputDialog(panel, "Enter New Employee ID:");
                 if (newId != null && !newId.trim().isEmpty()) {
                     // Prevent duplicate IDs before writing.
-                    if (checkEmployeeExists(newId)) {
+                    if (ExcelRepository.checkEmployeeExists(newId)) {
                         JOptionPane.showMessageDialog(panel, "Employee ID already exists!", "Error", JOptionPane.ERROR_MESSAGE);
                         return;
                     }
@@ -263,7 +262,7 @@ public class MotorPH extends JFrame {
                     String lName = JOptionPane.showInputDialog(panel, "Enter Last Name:");
                     
                     if (fName != null && lName != null) {
-                        boolean success = saveNewEmployee(newId, fName, lName);
+                        boolean success = ExcelRepository.saveNewEmployee(newId, fName, lName);
                         if(success) {
                             JOptionPane.showMessageDialog(panel, "Employee Successfully Added to Excel Database!");
                         } else {
@@ -280,10 +279,10 @@ public class MotorPH extends JFrame {
             public void actionPerformed(ActionEvent e) {
                 String empId = JOptionPane.showInputDialog(panel, "Enter Employee ID to Update:");
                 if (empId != null && !empId.trim().isEmpty()) {
-                    if (checkEmployeeExists(empId)) {
+                    if (ExcelRepository.checkEmployeeExists(empId)) {
                         String newStatus = JOptionPane.showInputDialog(panel, "Enter New Status (e.g. Regular, Probationary):");
                         if (newStatus != null) {
-                            boolean success = updateEmployeeStatus(empId, newStatus);
+                            boolean success = ExcelRepository.updateEmployeeStatus(empId, newStatus);
                             if (success) {
                                 JOptionPane.showMessageDialog(panel, "Employee Status Updated Successfully!");
                             } else {
@@ -303,10 +302,10 @@ public class MotorPH extends JFrame {
             public void actionPerformed(ActionEvent e) {
                 String empId = JOptionPane.showInputDialog(panel, "Enter Employee ID to Delete:");
                 if (empId != null && !empId.trim().isEmpty()) {
-                    if (checkEmployeeExists(empId)) {
+                    if (ExcelRepository.checkEmployeeExists(empId)) {
                         int confirm = JOptionPane.showConfirmDialog(panel, "WARNING: Are you sure you want to delete employee " + empId + "?", "Delete Record", JOptionPane.YES_NO_OPTION);
                         if (confirm == JOptionPane.YES_OPTION) {
-                            boolean success = removeEmployeeRecord(empId);
+                            boolean success = ExcelRepository.removeEmployeeRecord(empId);
                             if (success) {
                                 JOptionPane.showMessageDialog(panel, "Employee Record Deleted Permanently.");
                             } else {
@@ -335,7 +334,7 @@ public class MotorPH extends JFrame {
             public void actionPerformed(ActionEvent e) {
                 String empId = JOptionPane.showInputDialog(panel, "Enter Employee ID to Process:");
                 if (empId != null && !empId.trim().isEmpty()) {
-                    if (checkEmployeeExists(empId)) {
+                    if (ExcelRepository.checkEmployeeExists(empId)) {
                         handlePayrollFilterRequest(panel, empId);
                     } else {
                         JOptionPane.showMessageDialog(panel, "Employee ID not found.", "Error", JOptionPane.ERROR_MESSAGE);
@@ -466,76 +465,6 @@ public class MotorPH extends JFrame {
         });
 
         return panel;
-    }
-
-    // Appends a new employee row to the Excel database.
-    private static boolean saveNewEmployee(String id, String fName, String lName) {
-        try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
-             Workbook workbook = new XSSFWorkbook(fis)) {
-            Sheet sheet = workbook.getSheet("Employee Details");
-            int lastRow = sheet.getLastRowNum();
-            Row newRow = sheet.createRow(lastRow + 1);
-            
-            newRow.createCell(0).setCellValue(id);
-            newRow.createCell(1).setCellValue(lName);
-            newRow.createCell(2).setCellValue(fName);
-            // Default status on creation.
-            newRow.createCell(10).setCellValue("Probationary"); 
-            
-            try (FileOutputStream fos = new FileOutputStream(new File(EXCEL_FILE_PATH))) {
-                workbook.write(fos);
-            }
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    // Updates the status field for a given employee ID.
-    private static boolean updateEmployeeStatus(String id, String newStatus) {
-        try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
-             Workbook workbook = new XSSFWorkbook(fis)) {
-            Sheet sheet = workbook.getSheet("Employee Details");
-            for (Row row : sheet) {
-                if (getCellValueAsString(row.getCell(0)).equals(id)) {
-                    Cell statusCell = row.getCell(10);
-                    if (statusCell == null) statusCell = row.createCell(10);
-                    statusCell.setCellValue(newStatus);
-                    break;
-                }
-            }
-            try (FileOutputStream fos = new FileOutputStream(new File(EXCEL_FILE_PATH))) {
-                workbook.write(fos);
-            }
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    // Removes a row for the specified employee ID.
-    private static boolean removeEmployeeRecord(String id) {
-        try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
-             Workbook workbook = new XSSFWorkbook(fis)) {
-            Sheet sheet = workbook.getSheet("Employee Details");
-            int rowIndex = -1;
-            for (Row row : sheet) {
-                if (getCellValueAsString(row.getCell(0)).equals(id)) {
-                    rowIndex = row.getRowNum();
-                    break;
-                }
-            }
-            if (rowIndex != -1) {
-                sheet.removeRow(sheet.getRow(rowIndex));
-                try (FileOutputStream fos = new FileOutputStream(new File(EXCEL_FILE_PATH))) {
-                    workbook.write(fos);
-                }
-                return true;
-            }
-            return false;
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     // Displays HTML content in a scrollable dialog.
@@ -793,20 +722,6 @@ public class MotorPH extends JFrame {
             sb.append("<p style='color:red;'>Error reading records from the database.</p>");
         }
         return sb.toString();
-    }
-
-    // Checks if an employee ID exists in the Excel database.
-    private static boolean checkEmployeeExists(String id) {
-        try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
-             Workbook workbook = new XSSFWorkbook(fis)) {
-            Sheet sheet = workbook.getSheet("Employee Details");
-            for (Row row : sheet) {
-                if (getCellValueAsString(row.getCell(0)).equals(id)) {
-                    return true;
-                }
-            }
-        } catch (Exception e) {}
-        return false;
     }
 
     // Extracts distinct MM/YYYY periods from attendance records.
