@@ -7,6 +7,8 @@
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import repository.ExcelRepository;
+import service.PayrollService;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.Font;  
@@ -15,7 +17,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream; 
 import java.time.Duration;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -38,9 +39,6 @@ public class MotorPH extends JFrame {
     private static final String ADMIN_PASS = "admin123";
     // Path to the local Excel file used as the database.
     private static final String EXCEL_FILE_PATH = "MotorPH_EmployeeData.xlsx";
-    // Shared formatter for consistent cell-to-string conversion.
-    private static final DataFormatter FORMATTER = new DataFormatter();
-    
     // UI theme colors.
     private static final Color BG_DARK = new Color(18, 18, 18);
     private static final Color PANEL_DARK = new Color(30, 30, 30);
@@ -145,7 +143,7 @@ public class MotorPH extends JFrame {
                         }
                     } else {
                         // Employee login validates ID against the database.
-                        if (checkEmployeeExists(userId)) {
+                        if (ExcelRepository.checkEmployeeExists(userId)) {
                             currentLoggedInEmployeeId = userId; 
                             idField.setText(""); 
                             cardLayout.show(mainContainer, "EMPLOYEE_DASHBOARD");
@@ -222,11 +220,6 @@ public class MotorPH extends JFrame {
         deleteEmpBtn.setBackground(PANEL_DARK);
         deleteEmpBtn.setForeground(new Color(255, 100, 100));
         
-        JButton editPayrollBtn = new JButton("Edit Payroll Records [WIP]"); 
-        editPayrollBtn.setFont(btnFont);
-        editPayrollBtn.setBackground(PANEL_DARK);
-        editPayrollBtn.setForeground(TEXT_LIGHT);
-        
         JButton databaseCheckBtn = new JButton("Check Database Connection");
         databaseCheckBtn.setFont(btnFont);
         databaseCheckBtn.setBackground(PANEL_DARK);
@@ -238,7 +231,6 @@ public class MotorPH extends JFrame {
         buttonPanel.add(addEmpBtn);    
         buttonPanel.add(editEmpBtn);   
         buttonPanel.add(deleteEmpBtn); 
-        buttonPanel.add(editPayrollBtn);
         buttonPanel.add(databaseCheckBtn);
 
         panel.add(buttonPanel, BorderLayout.CENTER);
@@ -262,7 +254,7 @@ public class MotorPH extends JFrame {
                 String newId = JOptionPane.showInputDialog(panel, "Enter New Employee ID:");
                 if (newId != null && !newId.trim().isEmpty()) {
                     // Prevent duplicate IDs before writing.
-                    if (checkEmployeeExists(newId)) {
+                    if (ExcelRepository.checkEmployeeExists(newId)) {
                         JOptionPane.showMessageDialog(panel, "Employee ID already exists!", "Error", JOptionPane.ERROR_MESSAGE);
                         return;
                     }
@@ -270,7 +262,7 @@ public class MotorPH extends JFrame {
                     String lName = JOptionPane.showInputDialog(panel, "Enter Last Name:");
                     
                     if (fName != null && lName != null) {
-                        boolean success = saveNewEmployee(newId, fName, lName);
+                        boolean success = ExcelRepository.saveNewEmployee(newId, fName, lName);
                         if(success) {
                             JOptionPane.showMessageDialog(panel, "Employee Successfully Added to Excel Database!");
                         } else {
@@ -287,10 +279,10 @@ public class MotorPH extends JFrame {
             public void actionPerformed(ActionEvent e) {
                 String empId = JOptionPane.showInputDialog(panel, "Enter Employee ID to Update:");
                 if (empId != null && !empId.trim().isEmpty()) {
-                    if (checkEmployeeExists(empId)) {
+                    if (ExcelRepository.checkEmployeeExists(empId)) {
                         String newStatus = JOptionPane.showInputDialog(panel, "Enter New Status (e.g. Regular, Probationary):");
                         if (newStatus != null) {
-                            boolean success = updateEmployeeStatus(empId, newStatus);
+                            boolean success = ExcelRepository.updateEmployeeStatus(empId, newStatus);
                             if (success) {
                                 JOptionPane.showMessageDialog(panel, "Employee Status Updated Successfully!");
                             } else {
@@ -310,10 +302,10 @@ public class MotorPH extends JFrame {
             public void actionPerformed(ActionEvent e) {
                 String empId = JOptionPane.showInputDialog(panel, "Enter Employee ID to Delete:");
                 if (empId != null && !empId.trim().isEmpty()) {
-                    if (checkEmployeeExists(empId)) {
+                    if (ExcelRepository.checkEmployeeExists(empId)) {
                         int confirm = JOptionPane.showConfirmDialog(panel, "WARNING: Are you sure you want to delete employee " + empId + "?", "Delete Record", JOptionPane.YES_NO_OPTION);
                         if (confirm == JOptionPane.YES_OPTION) {
-                            boolean success = removeEmployeeRecord(empId);
+                            boolean success = ExcelRepository.removeEmployeeRecord(empId);
                             if (success) {
                                 JOptionPane.showMessageDialog(panel, "Employee Record Deleted Permanently.");
                             } else {
@@ -331,7 +323,7 @@ public class MotorPH extends JFrame {
         viewAllEmpBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                String report = getAllEmployeeProfilesString();
+                String report = ExcelRepository.getAllEmployeeProfilesString();
                 showReportWindow("All Employee Roster", HTML_HEADER + report + HTML_FOOTER);
             }
         });
@@ -342,7 +334,7 @@ public class MotorPH extends JFrame {
             public void actionPerformed(ActionEvent e) {
                 String empId = JOptionPane.showInputDialog(panel, "Enter Employee ID to Process:");
                 if (empId != null && !empId.trim().isEmpty()) {
-                    if (checkEmployeeExists(empId)) {
+                    if (ExcelRepository.checkEmployeeExists(empId)) {
                         handlePayrollFilterRequest(panel, empId);
                     } else {
                         JOptionPane.showMessageDialog(panel, "Employee ID not found.", "Error", JOptionPane.ERROR_MESSAGE);
@@ -356,14 +348,6 @@ public class MotorPH extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 handleBulkPayrollFilterRequest(panel);
-            }
-        });
-
-        // Placeholder for future payroll editing feature.
-        editPayrollBtn.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                JOptionPane.showMessageDialog(panel, "This feature is currently under development.", "Work In Progress", JOptionPane.INFORMATION_MESSAGE);
             }
         });
 
@@ -450,7 +434,7 @@ public class MotorPH extends JFrame {
         viewProfileBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                String profileData = getEmployeeProfileString(currentLoggedInEmployeeId);
+                String profileData = ExcelRepository.getEmployeeProfileString(currentLoggedInEmployeeId);
                 showReportWindow("My Profile Details", HTML_HEADER + profileData + HTML_FOOTER);
             }
         });
@@ -481,76 +465,6 @@ public class MotorPH extends JFrame {
         });
 
         return panel;
-    }
-
-    // Appends a new employee row to the Excel database.
-    private static boolean saveNewEmployee(String id, String fName, String lName) {
-        try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
-             Workbook workbook = new XSSFWorkbook(fis)) {
-            Sheet sheet = workbook.getSheet("Employee Details");
-            int lastRow = sheet.getLastRowNum();
-            Row newRow = sheet.createRow(lastRow + 1);
-            
-            newRow.createCell(0).setCellValue(id);
-            newRow.createCell(1).setCellValue(lName);
-            newRow.createCell(2).setCellValue(fName);
-            // Default status on creation.
-            newRow.createCell(10).setCellValue("Probationary"); 
-            
-            try (FileOutputStream fos = new FileOutputStream(new File(EXCEL_FILE_PATH))) {
-                workbook.write(fos);
-            }
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    // Updates the status field for a given employee ID.
-    private static boolean updateEmployeeStatus(String id, String newStatus) {
-        try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
-             Workbook workbook = new XSSFWorkbook(fis)) {
-            Sheet sheet = workbook.getSheet("Employee Details");
-            for (Row row : sheet) {
-                if (getCellValueAsString(row.getCell(0)).equals(id)) {
-                    Cell statusCell = row.getCell(10);
-                    if (statusCell == null) statusCell = row.createCell(10);
-                    statusCell.setCellValue(newStatus);
-                    break;
-                }
-            }
-            try (FileOutputStream fos = new FileOutputStream(new File(EXCEL_FILE_PATH))) {
-                workbook.write(fos);
-            }
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    // Removes a row for the specified employee ID.
-    private static boolean removeEmployeeRecord(String id) {
-        try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
-             Workbook workbook = new XSSFWorkbook(fis)) {
-            Sheet sheet = workbook.getSheet("Employee Details");
-            int rowIndex = -1;
-            for (Row row : sheet) {
-                if (getCellValueAsString(row.getCell(0)).equals(id)) {
-                    rowIndex = row.getRowNum();
-                    break;
-                }
-            }
-            if (rowIndex != -1) {
-                sheet.removeRow(sheet.getRow(rowIndex));
-                try (FileOutputStream fos = new FileOutputStream(new File(EXCEL_FILE_PATH))) {
-                    workbook.write(fos);
-                }
-                return true;
-            }
-            return false;
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     // Displays HTML content in a scrollable dialog.
@@ -651,7 +565,7 @@ public class MotorPH extends JFrame {
             // Locate the employee master record.
             Row row = null;
             for (Row r : empSheet) {
-                if (getCellValueAsString(r.getCell(0)).equals(id)) {
+                if (ExcelRepository.getCellValueAsString(r.getCell(0)).equals(id)) {
                     row = r;
                     break;
                 }
@@ -666,7 +580,7 @@ public class MotorPH extends JFrame {
             Row headerRow = empSheet.getRow(0);
             if (headerRow != null) {
                 for (Cell cell : headerRow) {
-                    if (getCellValueAsString(cell).toLowerCase().contains("hourly")) {
+                    if (ExcelRepository.getCellValueAsString(cell).toLowerCase().contains("hourly")) {
                         hourlyColIndex = cell.getColumnIndex();
                         break;
                     }
@@ -698,7 +612,7 @@ public class MotorPH extends JFrame {
                 activePeriods = filteredList;
             }
             
-            String name = getCellValueAsString(row.getCell(2)) + " " + getCellValueAsString(row.getCell(1));
+            String name = ExcelRepository.getCellValueAsString(row.getCell(2)) + " " + ExcelRepository.getCellValueAsString(row.getCell(1));
             
             sb.append("<h2 style='color: #4DA6FF; border-bottom: 1px solid #4DA6FF; padding-bottom: 5px;'>Payroll Summary for: [").append(id).append("] ").append(name).append("</h2>");
             
@@ -721,13 +635,13 @@ public class MotorPH extends JFrame {
 
                 if (totalHours > 0) {
                     // If hourly rate is stored as monthly, normalize to hourly.
-                    double hourlyRate = getNumericSafe(row.getCell(hourlyColIndex), evaluator); 
+                    double hourlyRate = ExcelRepository.getNumericSafe(row.getCell(hourlyColIndex), evaluator); 
                     if (hourlyRate > 1000) {
                         hourlyRate = hourlyRate / 160;
                     }
 
                     // Ensure a basic salary value for deductions and taxes.
-                    double basicSalary = getNumericSafe(row.getCell(13), evaluator); 
+                    double basicSalary = ExcelRepository.getNumericSafe(row.getCell(13), evaluator); 
                     if (basicSalary <= 0) {
                         basicSalary = hourlyRate * 160;
                     }
@@ -737,7 +651,7 @@ public class MotorPH extends JFrame {
                     double totalGross = gross1 + gross2;
                     
                     // Standard government deductions.
-                    double sss = calculateSSS(basicSalary);
+                    double sss = PayrollService.calculateSSS(basicSalary);
                     double philHealth = basicSalary * 0.025; 
                     if (philHealth > 2500.00) {
                         philHealth = 2500.00; 
@@ -746,7 +660,7 @@ public class MotorPH extends JFrame {
                     
                     double totalGovtDeductions = sss + philHealth + pagIbig;
                     double taxableIncome = totalGross - totalGovtDeductions;
-                    double tax = calculateTax(taxableIncome);
+                    double tax = PayrollService.calculateTax(taxableIncome);
                     
                     // Apply deductions on second cutoff (simplified business rule).
                     double net1 = gross1; 
@@ -794,7 +708,7 @@ public class MotorPH extends JFrame {
                 if (row.getRowNum() == 0) {
                     continue; 
                 }
-                String id = getCellValueAsString(row.getCell(0));
+                String id = ExcelRepository.getCellValueAsString(row.getCell(0));
                 
                 String report = processPayrollLoop(id, periodFilter);
                 if (!report.contains("No attendance records found")) {
@@ -810,126 +724,12 @@ public class MotorPH extends JFrame {
         return sb.toString();
     }
 
-    // Builds an HTML table for the company employee roster.
-    private String getAllEmployeeProfilesString() {
-        StringBuilder sb = new StringBuilder();
-        
-        try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
-             Workbook workbook = new XSSFWorkbook(fis)) {
-            Sheet sheet = workbook.getSheet("Employee Details");
-            
-            sb.append("<h2 style='color: #4DA6FF; border-bottom: 1px solid #4DA6FF; padding-bottom: 5px;'>Company Employee Roster</h2>");
-            sb.append("<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%; border-color: #555;'>");
-            sb.append("<tr style='background-color: #2C2C2C; color: #4DA6FF;'>");
-            
-            sb.append("<th>ID Number</th><th>Full Name</th><th>Position</th><th>Status</th>");
-            sb.append("</tr>");
-            
-            for (Row row : sheet) {
-                if (row.getRowNum() == 0) {
-                    continue; 
-                }
-                String id = getCellValueAsString(row.getCell(0));
-                String name = getCellValueAsString(row.getCell(2)) + " " + getCellValueAsString(row.getCell(1));
-                String position = getCellValueAsString(row.getCell(11));
-                String status = getCellValueAsString(row.getCell(10));
-                
-                if (!id.isEmpty()) {
-                    sb.append("<tr style='background-color: #1E1E1E;'>");
-                    sb.append("<td style='text-align: center;'>").append(id).append("</td>");
-                    sb.append("<td>").append(name).append("</td>");
-                    sb.append("<td>").append(position).append("</td>");
-                    sb.append("<td style='text-align: center;'>").append(status).append("</td>");
-                    sb.append("</tr>");
-                }
-            }
-            sb.append("</table>");
-        } catch (Exception e) {
-            sb.append("<p style='color:red;'>Error retrieving company roster: ").append(e.getMessage()).append("</p>");
-        }
-        return sb.toString();
-    }
-
-    // Builds an HTML profile summary for a single employee ID.
-    private String getEmployeeProfileString(String searchId) {
-        StringBuilder sb = new StringBuilder();
-        try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
-             Workbook workbook = new XSSFWorkbook(fis)) {
-            Sheet sheet = workbook.getSheet("Employee Details");
-            
-            // Locate the employee record.
-            Row myRow = null;
-            for (Row r : sheet) {
-                if (getCellValueAsString(r.getCell(0)).equals(searchId)) {
-                    myRow = r;
-                    break;
-                }
-            }
-            
-            if (myRow != null) {
-                
-                // Extract profile fields in fixed column order.
-                String idNum      = getCellValueAsString(myRow.getCell(0));
-                String firstName  = getCellValueAsString(myRow.getCell(1));
-                String lastName   = getCellValueAsString(myRow.getCell(2));
-                String fullName   = lastName + " " + firstName;
-                String birthday   = getCellValueAsString(myRow.getCell(3));
-                String address    = getCellValueAsString(myRow.getCell(4));
-                String phone      = getCellValueAsString(myRow.getCell(5));
-
-                String sss        = getCellValueAsString(myRow.getCell(6));
-                String philHealth = getCellValueAsString(myRow.getCell(7));
-                String tin        = getCellValueAsString(myRow.getCell(8));
-                String pagIbig    = getCellValueAsString(myRow.getCell(9));
-
-                String status     = getCellValueAsString(myRow.getCell(10));
-                String position   = getCellValueAsString(myRow.getCell(11));
-
-                sb.append("<h2 style='color: #4DA6FF; border-bottom: 1px solid #4DA6FF; padding-bottom: 5px;'>Employee Profile Record</h2>");
-                sb.append("<table border='0' cellpadding='6' style='font-size: 14px;'>");
-                sb.append("<tr><td style='color: #888;'>ID Number:</td><td><b>" + idNum + "</b></td></tr>");
-                sb.append("<tr><td style='color: #888;'>Full Name:</td><td><b>" + fullName + "</b></td></tr>");
-                sb.append("<tr><td style='color: #888;'>Birthday:</td><td>" + birthday + "</td></tr>");
-                sb.append("<tr><td style='color: #888;'>Address:</td><td>" + address + "</td></tr>");
-                sb.append("<tr><td style='color: #888;'>Phone:</td><td>" + phone + "</td></tr>");
-                sb.append("<tr><td colspan='2'><h3 style='color: #4DA6FF; margin-top: 15px;'>Government & Tax IDs</h3></td></tr>");
-                sb.append("<tr><td style='color: #888;'>SSS Number:</td><td>" + sss + "</td></tr>");
-                sb.append("<tr><td style='color: #888;'>PhilHealth No:</td><td>" + philHealth + "</td></tr>");
-                sb.append("<tr><td style='color: #888;'>TIN:</td><td>" + tin + "</td></tr>");
-                sb.append("<tr><td style='color: #888;'>Pag-IBIG No:</td><td>" + pagIbig + "</td></tr>");
-                sb.append("<tr><td colspan='2'><h3 style='color: #4DA6FF; margin-top: 15px;'>Employment Status</h3></td></tr>");
-                sb.append("<tr><td style='color: #888;'>Status:</td><td>" + status + "</td></tr>");
-                sb.append("<tr><td style='color: #888;'>Position:</td><td><b>" + position + "</b></td></tr>");
-                sb.append("</table>");
-            } else {
-                sb.append("<p style='color:red;'>Employee not found.</p>");
-            }
-        } catch (Exception e) {
-            sb.append("<p style='color:red;'>Error retrieving profile: ").append(e.getMessage()).append("</p>");
-        }
-        return sb.toString();
-    }
-
-    // Checks if an employee ID exists in the Excel database.
-    private static boolean checkEmployeeExists(String id) {
-        try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
-             Workbook workbook = new XSSFWorkbook(fis)) {
-            Sheet sheet = workbook.getSheet("Employee Details");
-            for (Row row : sheet) {
-                if (getCellValueAsString(row.getCell(0)).equals(id)) {
-                    return true;
-                }
-            }
-        } catch (Exception e) {}
-        return false;
-    }
-
     // Extracts distinct MM/YYYY periods from attendance records.
     private static List<String> getUniquePeriods(Sheet sheet, String id) {
         Set<String> periods = new LinkedHashSet<>();
         for (Row row : sheet) {
-            if (getCellValueAsString(row.getCell(0)).equals(id)) {
-                String date = getCellValueAsString(row.getCell(3));
+            if (ExcelRepository.getCellValueAsString(row.getCell(0)).equals(id)) {
+                String date = ExcelRepository.getCellValueAsString(row.getCell(3));
                 try {
                     String[] parts = date.split("/");
                     if (parts.length >= 3) {
@@ -954,8 +754,8 @@ public class MotorPH extends JFrame {
         LocalTime grace = LocalTime.of(8, 10);
 
         for (Row row : sheet) {
-            if (getCellValueAsString(row.getCell(0)).equals(id)) {
-                String date = getCellValueAsString(row.getCell(3));
+            if (ExcelRepository.getCellValueAsString(row.getCell(0)).equals(id)) {
+                String date = ExcelRepository.getCellValueAsString(row.getCell(3));
                 try {
                     String[] parts = date.split("/");
                     if (parts.length >= 3) {
@@ -968,8 +768,8 @@ public class MotorPH extends JFrame {
                         if ((mm + "/" + yyyy).equals(targetPeriod)) {
                             int day = Integer.parseInt(parts[1]);
                             if (day >= startDay && day <= endDay) {
-                                LocalTime timeIn = parseTime(getCellValueAsString(row.getCell(4)));
-                                LocalTime timeOut = parseTime(getCellValueAsString(row.getCell(5)));
+                                LocalTime timeIn = parseTime(ExcelRepository.getCellValueAsString(row.getCell(4)));
+                                LocalTime timeOut = parseTime(ExcelRepository.getCellValueAsString(row.getCell(5)));
                                 
                                 // Apply grace period for time-in.
                                 if (timeIn.isBefore(shiftStart) || (timeIn.isAfter(shiftStart) && timeIn.isBefore(grace))) {
@@ -997,46 +797,6 @@ public class MotorPH extends JFrame {
         return total;
     }
 
-    // Reads numeric values safely from a cell, including formulas and text.
-    private static double getNumericSafe(Cell cell, FormulaEvaluator evaluator) {
-        if (cell == null) {
-            return 0.0;
-        }
-        try {
-            if (cell.getCellType() == CellType.NUMERIC) {
-                return cell.getNumericCellValue();
-            } else if (cell.getCellType() == CellType.FORMULA) {
-                return evaluator.evaluate(cell).getNumberValue();
-            }
-            // Fallback: parse formatted strings and strip non-numeric symbols.
-            String val = FORMATTER.formatCellValue(cell, evaluator).replace(",", "").replaceAll("[^\\d.]", "");
-            if (val.isEmpty()) {
-                return 0.0;
-            } else {
-                return Double.parseDouble(val);
-            }
-        } catch (Exception e) { 
-            return 0.0; 
-        }
-    }
-
-    // Computes SSS deduction using a simplified bracket table.
-    private static double calculateSSS(double salary) {
-        if (salary <= 3250) return 135.00;
-        if (salary >= 24750) return 1125.00;
-        int steps = (int)((salary - 3250 - 0.01) / 500) + 1;
-        return 135.00 + (steps * 22.50);
-    }
-
-    // Computes withholding tax using simplified brackets.
-    private static double calculateTax(double taxableIncome) {
-        if (taxableIncome <= 20833) return 0;
-        if (taxableIncome <= 33333) return (taxableIncome - 20833) * 0.15;
-        if (taxableIncome <= 66667) return 1875 + (taxableIncome - 33333) * 0.20;
-        if (taxableIncome <= 166667) return 8541.67 + (taxableIncome - 66667) * 0.25;
-        return 33541.67 + (taxableIncome - 166667) * 0.30;
-    }
-
     // Parses time strings with or without AM/PM, falling back to 8:00 AM.
     private static LocalTime parseTime(String t) {
         try {
@@ -1049,14 +809,6 @@ public class MotorPH extends JFrame {
         } catch (Exception e) { 
             return LocalTime.of(8, 0); 
         }
-    }
-
-    // Converts any cell to a trimmed string for comparisons and display.
-    private static String getCellValueAsString(Cell cell) {
-        if (cell == null) {
-            return "";
-        }
-        return FORMATTER.formatCellValue(cell).trim();
     }
 
     // Application entry point.
