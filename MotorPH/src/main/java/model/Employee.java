@@ -1,5 +1,6 @@
 package model;
 
+// Stores an employee's basic personal and salary information.
 public class Employee {
     private String employeeId;
     private String lastName;

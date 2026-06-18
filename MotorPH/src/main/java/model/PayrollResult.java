@@ -1,5 +1,6 @@
 package model;
 
+// Stores the calculated payroll totals and deductions for an employee.
 public class PayrollResult {
     private String employeeId;
     private String employeeName;

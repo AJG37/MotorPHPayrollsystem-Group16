@@ -1,6 +1,8 @@
 package service;
 
+// Provides payroll calculations that are separate from the Swing user interface.
 public class PayrollService {
+    // Calculates the SSS deduction using the system's simplified salary brackets.
     public static double calculateSSS(double salary) {
         if (salary <= 3250) return 135.00;
         if (salary >= 24750) return 1125.00;
@@ -8,6 +10,7 @@ public class PayrollService {
         return 135.00 + (steps * 22.50);
     }
 
+    // Calculates withholding tax using the system's simplified tax brackets.
     public static double calculateTax(double taxableIncome) {
         if (taxableIncome <= 20833) return 0;
         if (taxableIncome <= 33333) return (taxableIncome - 20833) * 0.15;

@@ -13,10 +13,13 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+// Handles employee data operations stored in the MotorPH Excel workbook.
 public class ExcelRepository {
+    // The Excel file is expected in the program's working directory.
     private static final String EXCEL_FILE_PATH = "MotorPH_EmployeeData.xlsx";
     private static final DataFormatter FORMATTER = new DataFormatter();
 
+    // Adds a new employee row with a default probationary status.
     public static boolean saveNewEmployee(String id, String fName, String lName) {
         try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
              Workbook workbook = new XSSFWorkbook(fis)) {
@@ -38,6 +41,7 @@ public class ExcelRepository {
         }
     }
 
+    // Updates the employment status of the employee with the given ID.
     public static boolean updateEmployeeStatus(String id, String newStatus) {
         try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
              Workbook workbook = new XSSFWorkbook(fis)) {
@@ -59,6 +63,7 @@ public class ExcelRepository {
         }
     }
 
+    // Deletes the employee row that matches the given ID.
     public static boolean removeEmployeeRecord(String id) {
         try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
              Workbook workbook = new XSSFWorkbook(fis)) {
@@ -83,6 +88,7 @@ public class ExcelRepository {
         }
     }
 
+    // Checks whether an employee ID exists in the workbook.
     public static boolean checkEmployeeExists(String id) {
         try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
              Workbook workbook = new XSSFWorkbook(fis)) {
@@ -96,6 +102,7 @@ public class ExcelRepository {
         return false;
     }
 
+    // Builds an HTML table containing the employee roster.
     public static String getAllEmployeeProfilesString() {
         StringBuilder sb = new StringBuilder();
 
@@ -135,6 +142,7 @@ public class ExcelRepository {
         return sb.toString();
     }
 
+    // Builds an HTML profile summary for one employee.
     public static String getEmployeeProfileString(String searchId) {
         StringBuilder sb = new StringBuilder();
         try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
@@ -191,6 +199,7 @@ public class ExcelRepository {
         return sb.toString();
     }
 
+    // Reads a numeric cell safely, including formula and text values.
     public static double getNumericSafe(Cell cell, FormulaEvaluator evaluator) {
         if (cell == null) {
             return 0.0;
@@ -212,6 +221,7 @@ public class ExcelRepository {
         }
     }
 
+    // Converts a cell value to a trimmed string for comparisons and display.
     public static String getCellValueAsString(Cell cell) {
         if (cell == null) {
             return "";

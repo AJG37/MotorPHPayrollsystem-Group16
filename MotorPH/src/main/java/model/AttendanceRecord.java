@@ -3,6 +3,7 @@ package model;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
+// Represents one employee attendance entry for a specific date.
 public class AttendanceRecord {
     private String employeeId;
     private LocalDate date;
