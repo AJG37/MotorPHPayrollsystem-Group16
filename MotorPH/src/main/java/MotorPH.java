@@ -565,7 +565,7 @@ public class MotorPH extends JFrame {
             // Locate the employee master record.
             Row row = null;
             for (Row r : empSheet) {
-                if (getCellValueAsString(r.getCell(0)).equals(id)) {
+                if (ExcelRepository.getCellValueAsString(r.getCell(0)).equals(id)) {
                     row = r;
                     break;
                 }
@@ -580,7 +580,7 @@ public class MotorPH extends JFrame {
             Row headerRow = empSheet.getRow(0);
             if (headerRow != null) {
                 for (Cell cell : headerRow) {
-                    if (getCellValueAsString(cell).toLowerCase().contains("hourly")) {
+                    if (ExcelRepository.getCellValueAsString(cell).toLowerCase().contains("hourly")) {
                         hourlyColIndex = cell.getColumnIndex();
                         break;
                     }
@@ -612,7 +612,7 @@ public class MotorPH extends JFrame {
                 activePeriods = filteredList;
             }
             
-            String name = getCellValueAsString(row.getCell(2)) + " " + getCellValueAsString(row.getCell(1));
+            String name = ExcelRepository.getCellValueAsString(row.getCell(2)) + " " + ExcelRepository.getCellValueAsString(row.getCell(1));
             
             sb.append("<h2 style='color: #4DA6FF; border-bottom: 1px solid #4DA6FF; padding-bottom: 5px;'>Payroll Summary for: [").append(id).append("] ").append(name).append("</h2>");
             
@@ -635,13 +635,13 @@ public class MotorPH extends JFrame {
 
                 if (totalHours > 0) {
                     // If hourly rate is stored as monthly, normalize to hourly.
-                    double hourlyRate = getNumericSafe(row.getCell(hourlyColIndex), evaluator); 
+                    double hourlyRate = ExcelRepository.getNumericSafe(row.getCell(hourlyColIndex), evaluator); 
                     if (hourlyRate > 1000) {
                         hourlyRate = hourlyRate / 160;
                     }
 
                     // Ensure a basic salary value for deductions and taxes.
-                    double basicSalary = getNumericSafe(row.getCell(13), evaluator); 
+                    double basicSalary = ExcelRepository.getNumericSafe(row.getCell(13), evaluator); 
                     if (basicSalary <= 0) {
                         basicSalary = hourlyRate * 160;
                     }
@@ -708,7 +708,7 @@ public class MotorPH extends JFrame {
                 if (row.getRowNum() == 0) {
                     continue; 
                 }
-                String id = getCellValueAsString(row.getCell(0));
+                String id = ExcelRepository.getCellValueAsString(row.getCell(0));
                 
                 String report = processPayrollLoop(id, periodFilter);
                 if (!report.contains("No attendance records found")) {
@@ -728,8 +728,8 @@ public class MotorPH extends JFrame {
     private static List<String> getUniquePeriods(Sheet sheet, String id) {
         Set<String> periods = new LinkedHashSet<>();
         for (Row row : sheet) {
-            if (getCellValueAsString(row.getCell(0)).equals(id)) {
-                String date = getCellValueAsString(row.getCell(3));
+            if (ExcelRepository.getCellValueAsString(row.getCell(0)).equals(id)) {
+                String date = ExcelRepository.getCellValueAsString(row.getCell(3));
                 try {
                     String[] parts = date.split("/");
                     if (parts.length >= 3) {
@@ -754,8 +754,8 @@ public class MotorPH extends JFrame {
         LocalTime grace = LocalTime.of(8, 10);
 
         for (Row row : sheet) {
-            if (getCellValueAsString(row.getCell(0)).equals(id)) {
-                String date = getCellValueAsString(row.getCell(3));
+            if (ExcelRepository.getCellValueAsString(row.getCell(0)).equals(id)) {
+                String date = ExcelRepository.getCellValueAsString(row.getCell(3));
                 try {
                     String[] parts = date.split("/");
                     if (parts.length >= 3) {
@@ -768,8 +768,8 @@ public class MotorPH extends JFrame {
                         if ((mm + "/" + yyyy).equals(targetPeriod)) {
                             int day = Integer.parseInt(parts[1]);
                             if (day >= startDay && day <= endDay) {
-                                LocalTime timeIn = parseTime(getCellValueAsString(row.getCell(4)));
-                                LocalTime timeOut = parseTime(getCellValueAsString(row.getCell(5)));
+                                LocalTime timeIn = parseTime(ExcelRepository.getCellValueAsString(row.getCell(4)));
+                                LocalTime timeOut = parseTime(ExcelRepository.getCellValueAsString(row.getCell(5)));
                                 
                                 // Apply grace period for time-in.
                                 if (timeIn.isBefore(shiftStart) || (timeIn.isAfter(shiftStart) && timeIn.isBefore(grace))) {
@@ -797,29 +797,6 @@ public class MotorPH extends JFrame {
         return total;
     }
 
-    // Reads numeric values safely from a cell, including formulas and text.
-    private static double getNumericSafe(Cell cell, FormulaEvaluator evaluator) {
-        if (cell == null) {
-            return 0.0;
-        }
-        try {
-            if (cell.getCellType() == CellType.NUMERIC) {
-                return cell.getNumericCellValue();
-            } else if (cell.getCellType() == CellType.FORMULA) {
-                return evaluator.evaluate(cell).getNumberValue();
-            }
-            // Fallback: parse formatted strings and strip non-numeric symbols.
-            String val = ExcelRepository.getCellValueAsString(cell).replace(",", "").replaceAll("[^\\d.]", "");
-            if (val.isEmpty()) {
-                return 0.0;
-            } else {
-                return Double.parseDouble(val);
-            }
-        } catch (Exception e) { 
-            return 0.0; 
-        }
-    }
-
     // Parses time strings with or without AM/PM, falling back to 8:00 AM.
     private static LocalTime parseTime(String t) {
         try {
@@ -832,14 +809,6 @@ public class MotorPH extends JFrame {
         } catch (Exception e) { 
             return LocalTime.of(8, 0); 
         }
-    }
-
-    // Converts any cell to a trimmed string for comparisons and display.
-    private static String getCellValueAsString(Cell cell) {
-        if (cell == null) {
-            return "";
-        }
-        return ExcelRepository.getCellValueAsString(cell);
     }
 
     // Application entry point.
