@@ -5,14 +5,16 @@
  * All data is read from and written to a local Excel database.
  */
 
-import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import repository.ExcelRepository;
 import service.PayrollService;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.Font;  
-import java.awt.Color; 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
@@ -26,7 +28,8 @@ import java.util.List;
 import java.util.Set;
 
 // Main Swing application window for the MotorPH payroll system.
-public class MotorPH extends JFrame {
+public final class MotorPH extends JFrame {
+    private static final long serialVersionUID = 1L;
     
     // Card-based navigation between login/admin/employee views.
     private CardLayout cardLayout;
@@ -35,19 +38,35 @@ public class MotorPH extends JFrame {
     private String currentLoggedInEmployeeId = "";
 
     // Static credentials for admin access.
-    private static final String ADMIN_ID = "999"; 
+    private static final String ADMIN_ID = "999";
     private static final String ADMIN_PASS = "admin123";
+    private static final String EMPLOYEE_ID_PATTERN = "\\d{5}";
+    private static final String EMPLOYEE_NAME_PATTERN = "\\p{L}+(?:[ '\\-]\\p{L}+)*";
+    private static final String EMPLOYEE_POSITION_PATTERN = "(?=.*\\p{L})[\\p{L} '&\\-]+";
+    private static final String PAYROLL_PERIOD_PATTERN = "(0[1-9]|1[0-2])/\\d{4}";
+    private static final String[] VALID_EMPLOYEE_STATUSES = {"Regular", "Probationary"};
     // Path to the local Excel file used as the database.
     private static final String EXCEL_FILE_PATH = "MotorPH_EmployeeData.xlsx";
     // UI theme colors.
-    private static final Color BG_DARK = new Color(18, 18, 18);
-    private static final Color PANEL_DARK = new Color(30, 30, 30);
-    private static final Color TEXT_LIGHT = new Color(240, 240, 240);
-    private static final Color BTN_ACCENT = new Color(70, 70, 70);
+    private static final Color BG_DARK = new Color(15, 23, 42);
+    private static final Color PANEL_DARK = new Color(51, 65, 85);
+    private static final Color FIELD_DARK = new Color(17, 24, 39);
+    private static final Color TEXT_LIGHT = new Color(248, 250, 252);
+    private static final Color BTN_ACCENT = new Color(37, 99, 235);
+    private static final Color BORDER_LIGHT = new Color(100, 116, 139);
+    private static final Color SUCCESS_TEXT = new Color(134, 239, 172);
+    private static final Color WARNING_TEXT = new Color(253, 230, 138);
+    private static final Color DANGER_TEXT = new Color(252, 165, 165);
+    private static final Color INFO_TEXT = new Color(147, 197, 253);
     
     // HTML wrapper used for report dialogs.
-    private static final String HTML_HEADER = "<html><body style='font-family: Arial, sans-serif; background-color: #1E1E1E; color: #F0F0F0; margin: 10px;'>";
+    private static final String HTML_HEADER = "<html><body style='font-family: Arial, sans-serif; background-color: #0F172A; color: #F8FAFC; margin: 10px;'>";
     private static final String HTML_FOOTER = "</body></html>";
+
+    // Small interface used to prepare report content in the background.
+    private interface ReportLoader {
+        String loadReport();
+    }
 
     // Application constructor that initializes the main window and cards.
     public MotorPH() {
@@ -62,6 +81,15 @@ public class MotorPH extends JFrame {
         UIManager.put("OptionPane.background", PANEL_DARK);
         UIManager.put("Panel.background", PANEL_DARK);
         UIManager.put("OptionPane.messageForeground", TEXT_LIGHT);
+        UIManager.put("Button.background", BTN_ACCENT);
+        UIManager.put("Button.foreground", TEXT_LIGHT);
+        UIManager.put("TextField.background", FIELD_DARK);
+        UIManager.put("TextField.foreground", TEXT_LIGHT);
+        UIManager.put("PasswordField.background", FIELD_DARK);
+        UIManager.put("PasswordField.foreground", TEXT_LIGHT);
+        UIManager.put("ComboBox.background", FIELD_DARK);
+        UIManager.put("ComboBox.foreground", TEXT_LIGHT);
+        UIManager.put("ProgressBar.foreground", BTN_ACCENT);
 
         cardLayout = new CardLayout();
         mainContainer = new JPanel(cardLayout);
@@ -73,6 +101,86 @@ public class MotorPH extends JFrame {
 
         add(mainContainer);
         cardLayout.show(mainContainer, "LOGIN");
+    }
+
+    // Stops a file-dependent action and explains the expected Excel format.
+    private boolean ensureWorkbookReady(Component parent) {
+        String validationError = ExcelRepository.getWorkbookValidationError();
+        if (validationError != null) {
+            JOptionPane.showMessageDialog(parent, validationError,
+                    "Excel Data File Error", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+        return true;
+    }
+
+    // Employee IDs in the current MotorPH workbook use exactly five digits.
+    private static boolean isValidEmployeeId(String employeeId) {
+        return employeeId != null && employeeId.matches(EMPLOYEE_ID_PATTERN);
+    }
+
+    // Names may contain letters, single spaces, hyphens, and apostrophes.
+    private static boolean isValidEmployeeName(String name) {
+        return name != null && name.matches(EMPLOYEE_NAME_PATTERN);
+    }
+
+    // Positions may use letters, spaces, hyphens, apostrophes, and ampersands.
+    private static boolean isValidEmployeePosition(String position) {
+        return position != null && position.matches(EMPLOYEE_POSITION_PATTERN);
+    }
+
+    // Returns the standard status spelling, or null when the value is not allowed.
+    private static String getValidEmployeeStatus(String status) {
+        if (status == null) {
+            return null;
+        }
+        for (String validStatus : VALID_EMPLOYEE_STATUSES) {
+            if (validStatus.equalsIgnoreCase(status)) {
+                return validStatus;
+            }
+        }
+        return null;
+    }
+
+    // Prompts for a month/year and explains the required format when invalid.
+    private static String promptForPayrollPeriod(Component parent) {
+        String period = JOptionPane.showInputDialog(parent,
+                "Enter Month and Year (MM/YYYY):");
+        if (period == null) {
+            return null;
+        }
+
+        period = period.trim();
+        if (!period.matches(PAYROLL_PERIOD_PATTERN)) {
+            JOptionPane.showMessageDialog(parent,
+                    "Enter a valid month and year in MM/YYYY format (example: 01/2024).",
+                    "Invalid Payroll Period", JOptionPane.WARNING_MESSAGE);
+            return null;
+        }
+        return period;
+    }
+
+    // Applies consistent contrast and spacing to dashboard menu buttons.
+    private static void styleMenuButton(JButton button, Font font, Color textColor) {
+        button.setFont(font);
+        button.setBackground(PANEL_DARK);
+        button.setForeground(textColor);
+        button.setFocusPainted(false);
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        button.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDER_LIGHT),
+                BorderFactory.createEmptyBorder(8, 16, 8, 16)));
+    }
+
+    // Applies the brighter blue style used for primary actions.
+    private static void styleAccentButton(JButton button) {
+        button.setBackground(BTN_ACCENT);
+        button.setForeground(TEXT_LIGHT);
+        button.setFocusPainted(false);
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        button.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(INFO_TEXT),
+                BorderFactory.createEmptyBorder(5, 12, 5, 12)));
     }
 
     // Builds the login screen UI and validation logic.
@@ -95,18 +203,36 @@ public class MotorPH extends JFrame {
         
         JTextField idField = new JTextField(15);
         idField.setFont(new Font("Arial", Font.PLAIN, 16));
-        idField.setBackground(PANEL_DARK);
+        idField.setBackground(FIELD_DARK);
         idField.setForeground(TEXT_LIGHT);
         idField.setCaretColor(Color.WHITE);
+        idField.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDER_LIGHT),
+                BorderFactory.createEmptyBorder(5, 7, 5, 7)));
         gbc.gridx = 1;
         panel.add(idField, gbc);
 
+        JLabel passwordLabel = new JLabel("Admin Password:");
+        passwordLabel.setForeground(TEXT_LIGHT);
+        gbc.gridx = 0; gbc.gridy = 2;
+        panel.add(passwordLabel, gbc);
+
+        JPasswordField passwordField = new JPasswordField(15);
+        passwordField.setFont(new Font("Arial", Font.PLAIN, 16));
+        passwordField.setBackground(FIELD_DARK);
+        passwordField.setForeground(TEXT_LIGHT);
+        passwordField.setCaretColor(Color.WHITE);
+        passwordField.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDER_LIGHT),
+                BorderFactory.createEmptyBorder(5, 7, 5, 7)));
+        passwordField.setToolTipText("Required only for administrator login");
+        gbc.gridx = 1;
+        panel.add(passwordField, gbc);
+
         JButton loginBtn = new JButton("Login");
         loginBtn.setFont(new Font("Arial", Font.BOLD, 14));
-        loginBtn.setBackground(BTN_ACCENT);
-        loginBtn.setForeground(TEXT_LIGHT);
-        loginBtn.setFocusPainted(false);
-        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2;
+        styleAccentButton(loginBtn);
+        gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2;
         panel.add(loginBtn, gbc);
 
         // Attempt login; route to admin or employee dashboard.
@@ -118,46 +244,64 @@ public class MotorPH extends JFrame {
 
                     // Basic input validation.
                     if (userId.isEmpty()) {
-                        throw new IllegalArgumentException("Employee ID cannot be blank!");
+                        throw new IllegalArgumentException("Employee ID is required.");
                     }
 
-                    // Admin login path requires a password prompt.
+                    // Admin login uses the password field shown below the employee ID.
                     if (userId.equals(ADMIN_ID)) {
-                        JPasswordField pf = new JPasswordField();
-                        pf.setBackground(PANEL_DARK);
-                        pf.setForeground(TEXT_LIGHT);
-                        pf.setCaretColor(Color.WHITE);
-                        
-                        int okCxl = JOptionPane.showConfirmDialog(panel, pf, "Enter Admin Password", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-                        
-                        if (okCxl == JOptionPane.OK_OPTION) {
-                            String pass = new String(pf.getPassword());
-                            if (pass.equals(ADMIN_PASS)) {
-                                // Successful admin login.
-                                currentLoggedInEmployeeId = ADMIN_ID; 
-                                idField.setText(""); 
-                                cardLayout.show(mainContainer, "ADMIN_DASHBOARD"); 
-                            } else {
-                                throw new SecurityException("Incorrect Admin Password.");
-                            }
+                        String pass = new String(passwordField.getPassword());
+                        if (pass.equals(ADMIN_PASS)) {
+                            // Successful admin login.
+                            currentLoggedInEmployeeId = ADMIN_ID;
+                            idField.setText("");
+                            passwordField.setText("");
+                            cardLayout.show(mainContainer, "ADMIN_DASHBOARD");
+                        } else {
+                            throw new SecurityException("The administrator password is incorrect.");
                         }
                     } else {
                         // Employee login validates ID against the database.
+                        if (!ensureWorkbookReady(panel)) {
+                            return;
+                        }
                         if (ExcelRepository.checkEmployeeExists(userId)) {
-                            currentLoggedInEmployeeId = userId; 
-                            idField.setText(""); 
+                            currentLoggedInEmployeeId = userId;
+                            idField.setText("");
+                            passwordField.setText("");
                             cardLayout.show(mainContainer, "EMPLOYEE_DASHBOARD");
                         } else {
-                            throw new IllegalArgumentException("Employee ID not found in database.");
+                            throw new IllegalArgumentException("Employee ID " + userId + " was not found.");
                         }
                     }
                 } catch (IllegalArgumentException ex) {
                     JOptionPane.showMessageDialog(panel, ex.getMessage(), "Input Error", JOptionPane.WARNING_MESSAGE);
                 } catch (SecurityException ex) {
                     JOptionPane.showMessageDialog(panel, ex.getMessage(), "Access Denied", JOptionPane.ERROR_MESSAGE);
+                    passwordField.setText("");
+                    passwordField.requestFocusInWindow();
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(panel, "System error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
                 }
+            }
+        });
+
+        // Enter moves admins to the password field; employee IDs log in directly.
+        idField.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (idField.getText().trim().equals(ADMIN_ID)) {
+                    passwordField.requestFocusInWindow();
+                } else {
+                    loginBtn.doClick();
+                }
+            }
+        });
+
+        // Pressing Enter in the password field submits the existing Login action.
+        passwordField.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                loginBtn.doClick();
             }
         });
 
@@ -177,8 +321,7 @@ public class MotorPH extends JFrame {
         navBar.add(roleLabel);
         
         JButton logoutBtn = new JButton("Logout");
-        logoutBtn.setBackground(BTN_ACCENT);
-        logoutBtn.setForeground(TEXT_LIGHT);
+        styleAccentButton(logoutBtn);
         navBar.add(logoutBtn);
         
         panel.add(navBar, BorderLayout.NORTH);
@@ -191,39 +334,25 @@ public class MotorPH extends JFrame {
         Font btnFont = new Font("Arial", Font.PLAIN, 18);
         
         JButton viewAllEmpBtn = new JButton("View All Employee Profiles");
-        viewAllEmpBtn.setFont(btnFont);
-        viewAllEmpBtn.setBackground(PANEL_DARK);
-        viewAllEmpBtn.setForeground(TEXT_LIGHT);
+        styleMenuButton(viewAllEmpBtn, btnFont, TEXT_LIGHT);
         
         JButton processOneBtn = new JButton("Process Single Employee Payroll");
-        processOneBtn.setFont(btnFont);
-        processOneBtn.setBackground(PANEL_DARK);
-        processOneBtn.setForeground(TEXT_LIGHT);
+        styleMenuButton(processOneBtn, btnFont, TEXT_LIGHT);
         
         JButton processAllBtn = new JButton("Process Company Payroll (Bulk)");
-        processAllBtn.setFont(btnFont);
-        processAllBtn.setBackground(PANEL_DARK);
-        processAllBtn.setForeground(TEXT_LIGHT);
+        styleMenuButton(processAllBtn, btnFont, INFO_TEXT);
 
         JButton addEmpBtn = new JButton("Add New Employee");
-        addEmpBtn.setFont(btnFont);
-        addEmpBtn.setBackground(PANEL_DARK);
-        addEmpBtn.setForeground(new Color(100, 200, 100)); 
+        styleMenuButton(addEmpBtn, btnFont, SUCCESS_TEXT);
         
-        JButton editEmpBtn = new JButton("Update Employee Status");
-        editEmpBtn.setFont(btnFont);
-        editEmpBtn.setBackground(PANEL_DARK);
-        editEmpBtn.setForeground(new Color(255, 200, 100));
+        JButton editEmpBtn = new JButton("Update Employee Record");
+        styleMenuButton(editEmpBtn, btnFont, WARNING_TEXT);
         
         JButton deleteEmpBtn = new JButton("Delete Employee Record");
-        deleteEmpBtn.setFont(btnFont);
-        deleteEmpBtn.setBackground(PANEL_DARK);
-        deleteEmpBtn.setForeground(new Color(255, 100, 100));
+        styleMenuButton(deleteEmpBtn, btnFont, DANGER_TEXT);
         
         JButton databaseCheckBtn = new JButton("Check Database Connection");
-        databaseCheckBtn.setFont(btnFont);
-        databaseCheckBtn.setBackground(PANEL_DARK);
-        databaseCheckBtn.setForeground(TEXT_LIGHT);
+        styleMenuButton(databaseCheckBtn, btnFont, TEXT_LIGHT);
 
         buttonPanel.add(viewAllEmpBtn);
         buttonPanel.add(processOneBtn);
@@ -251,47 +380,197 @@ public class MotorPH extends JFrame {
         addEmpBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                if (!ensureWorkbookReady(panel)) {
+                    return;
+                }
                 String newId = JOptionPane.showInputDialog(panel, "Enter New Employee ID:");
-                if (newId != null && !newId.trim().isEmpty()) {
-                    // Prevent duplicate IDs before writing.
-                    if (ExcelRepository.checkEmployeeExists(newId)) {
-                        JOptionPane.showMessageDialog(panel, "Employee ID already exists!", "Error", JOptionPane.ERROR_MESSAGE);
-                        return;
-                    }
-                    String fName = JOptionPane.showInputDialog(panel, "Enter First Name:");
-                    String lName = JOptionPane.showInputDialog(panel, "Enter Last Name:");
-                    
-                    if (fName != null && lName != null) {
-                        boolean success = ExcelRepository.saveNewEmployee(newId, fName, lName);
-                        if(success) {
-                            JOptionPane.showMessageDialog(panel, "Employee Successfully Added to Excel Database!");
-                        } else {
-                            JOptionPane.showMessageDialog(panel, "Error writing to Database.", "Error", JOptionPane.ERROR_MESSAGE);
-                        }
-                    }
+                if (newId == null) {
+                    return;
+                }
+
+                newId = newId.trim();
+                if (newId.isEmpty()) {
+                    JOptionPane.showMessageDialog(panel, "Employee ID is required.",
+                            "Invalid Employee ID", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                if (!isValidEmployeeId(newId)) {
+                    JOptionPane.showMessageDialog(panel,
+                            "Employee ID must contain exactly 5 digits (example: 10035).",
+                            "Invalid Employee ID", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+
+                // Prevent duplicate IDs before writing.
+                if (ExcelRepository.checkEmployeeExists(newId)) {
+                    JOptionPane.showMessageDialog(panel,
+                            "Employee ID " + newId + " already exists.",
+                            "Duplicate Employee", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+
+                String fName = JOptionPane.showInputDialog(panel, "Enter First Name:");
+                if (fName == null) {
+                    return;
+                }
+                fName = fName.trim();
+                if (fName.isEmpty()) {
+                    JOptionPane.showMessageDialog(panel, "First Name is required.",
+                            "Invalid First Name", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                if (!isValidEmployeeName(fName)) {
+                    JOptionPane.showMessageDialog(panel,
+                            "First Name may contain only letters, spaces, hyphens, and apostrophes.",
+                            "Invalid First Name", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+
+                String lName = JOptionPane.showInputDialog(panel, "Enter Last Name:");
+                if (lName == null) {
+                    return;
+                }
+                lName = lName.trim();
+                if (lName.isEmpty()) {
+                    JOptionPane.showMessageDialog(panel, "Last Name is required.",
+                            "Invalid Last Name", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                if (!isValidEmployeeName(lName)) {
+                    JOptionPane.showMessageDialog(panel,
+                            "Last Name may contain only letters, spaces, hyphens, and apostrophes.",
+                            "Invalid Last Name", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+
+                boolean success = ExcelRepository.saveNewEmployee(newId, fName, lName);
+                if(success) {
+                    JOptionPane.showMessageDialog(panel,
+                            "Employee " + newId + " was added successfully.",
+                            "Employee Added", JOptionPane.INFORMATION_MESSAGE);
+                } else {
+                    JOptionPane.showMessageDialog(panel,
+                            "Unable to add the employee. Close the Excel file if it is open, then try again.",
+                            "Add Failed", JOptionPane.ERROR_MESSAGE);
                 }
             }
         });
 
-        // Updates an employee's status column in Excel.
+        // Updates safe employee text fields without changing payroll values or formulas.
         editEmpBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                if (!ensureWorkbookReady(panel)) {
+                    return;
+                }
                 String empId = JOptionPane.showInputDialog(panel, "Enter Employee ID to Update:");
-                if (empId != null && !empId.trim().isEmpty()) {
-                    if (ExcelRepository.checkEmployeeExists(empId)) {
-                        String newStatus = JOptionPane.showInputDialog(panel, "Enter New Status (e.g. Regular, Probationary):");
-                        if (newStatus != null) {
-                            boolean success = ExcelRepository.updateEmployeeStatus(empId, newStatus);
-                            if (success) {
-                                JOptionPane.showMessageDialog(panel, "Employee Status Updated Successfully!");
-                            } else {
-                                JOptionPane.showMessageDialog(panel, "Error updating Database.", "Error", JOptionPane.ERROR_MESSAGE);
-                            }
-                        }
-                    } else {
-                        JOptionPane.showMessageDialog(panel, "Employee ID not found.", "Error", JOptionPane.ERROR_MESSAGE);
+                if (empId == null) {
+                    return;
+                }
+
+                empId = empId.trim();
+                if (empId.isEmpty()) {
+                    JOptionPane.showMessageDialog(panel, "Employee ID is required.",
+                            "Invalid Employee ID", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                if (!isValidEmployeeId(empId)) {
+                    JOptionPane.showMessageDialog(panel,
+                            "Employee ID must contain exactly 5 digits.",
+                            "Invalid Employee ID", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                if (!ExcelRepository.checkEmployeeExists(empId)) {
+                    JOptionPane.showMessageDialog(panel,
+                            "Employee ID " + empId + " was not found.",
+                            "Employee Not Found", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+
+                String[] editableFields = {"First Name", "Last Name", "Status", "Position"};
+                String selectedField = (String) JOptionPane.showInputDialog(panel,
+                        "Select the employee field to update:",
+                        "Update Employee Record",
+                        JOptionPane.QUESTION_MESSAGE,
+                        null,
+                        editableFields,
+                        editableFields[0]);
+                if (selectedField == null) {
+                    return;
+                }
+
+                String prompt;
+                int columnIndex;
+                switch (selectedField) {
+                    case "First Name":
+                        prompt = "Enter New First Name:";
+                        columnIndex = 2;
+                        break;
+                    case "Last Name":
+                        prompt = "Enter New Last Name:";
+                        columnIndex = 1;
+                        break;
+                    case "Status":
+                        prompt = "Enter New Status (Regular or Probationary):";
+                        columnIndex = 10;
+                        break;
+                    case "Position":
+                        prompt = "Enter New Position:";
+                        columnIndex = 11;
+                        break;
+                    default:
+                        return;
+                }
+
+                String newValue = JOptionPane.showInputDialog(panel, prompt);
+                if (newValue == null) {
+                    return;
+                }
+
+                newValue = newValue.trim();
+                if (newValue.isEmpty()) {
+                    JOptionPane.showMessageDialog(panel,
+                            selectedField + " is required.",
+                            "Invalid " + selectedField, JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+
+                if ((selectedField.equals("First Name") || selectedField.equals("Last Name"))
+                        && !isValidEmployeeName(newValue)) {
+                    JOptionPane.showMessageDialog(panel,
+                            selectedField + " may contain only letters, spaces, hyphens, and apostrophes.",
+                            "Invalid " + selectedField, JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+
+                if (selectedField.equals("Status")) {
+                    String validStatus = getValidEmployeeStatus(newValue);
+                    if (validStatus == null) {
+                        JOptionPane.showMessageDialog(panel,
+                                "Employee Status must be Regular or Probationary.",
+                                "Invalid Status", JOptionPane.WARNING_MESSAGE);
+                        return;
                     }
+                    newValue = validStatus;
+                }
+
+                if (selectedField.equals("Position") && !isValidEmployeePosition(newValue)) {
+                    JOptionPane.showMessageDialog(panel,
+                            "Position may contain only letters, spaces, hyphens, apostrophes, and ampersands.",
+                            "Invalid Position", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+
+                boolean success = ExcelRepository.updateEmployeeField(empId, columnIndex, newValue);
+                if (success) {
+                    JOptionPane.showMessageDialog(panel,
+                            "Employee " + empId + " " + selectedField
+                                    + " updated to " + newValue + ".",
+                            "Update Successful", JOptionPane.INFORMATION_MESSAGE);
+                } else {
+                    JOptionPane.showMessageDialog(panel,
+                            "Unable to update the employee record.",
+                            "Update Failed", JOptionPane.ERROR_MESSAGE);
                 }
             }
         });
@@ -300,21 +579,42 @@ public class MotorPH extends JFrame {
         deleteEmpBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                if (!ensureWorkbookReady(panel)) {
+                    return;
+                }
                 String empId = JOptionPane.showInputDialog(panel, "Enter Employee ID to Delete:");
-                if (empId != null && !empId.trim().isEmpty()) {
-                    if (ExcelRepository.checkEmployeeExists(empId)) {
-                        int confirm = JOptionPane.showConfirmDialog(panel, "WARNING: Are you sure you want to delete employee " + empId + "?", "Delete Record", JOptionPane.YES_NO_OPTION);
+                if (empId == null) {
+                    return;
+                }
+
+                empId = empId.trim();
+                if (!isValidEmployeeId(empId)) {
+                    JOptionPane.showMessageDialog(panel,
+                            "Employee ID must contain exactly 5 digits.",
+                            "Invalid Employee ID", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+
+                if (ExcelRepository.checkEmployeeExists(empId)) {
+                        int confirm = JOptionPane.showConfirmDialog(panel,
+                                "Delete employee " + empId + "?\nThis permanently removes the employee record.",
+                                "Confirm Delete", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
                         if (confirm == JOptionPane.YES_OPTION) {
                             boolean success = ExcelRepository.removeEmployeeRecord(empId);
                             if (success) {
-                                JOptionPane.showMessageDialog(panel, "Employee Record Deleted Permanently.");
+                                JOptionPane.showMessageDialog(panel,
+                                        "Employee " + empId + " was deleted successfully.",
+                                        "Employee Deleted", JOptionPane.INFORMATION_MESSAGE);
                             } else {
-                                JOptionPane.showMessageDialog(panel, "Error removing record from Database.", "Error", JOptionPane.ERROR_MESSAGE);
+                                JOptionPane.showMessageDialog(panel,
+                                        "Unable to delete the employee. Close the Excel file if it is open, then try again.",
+                                        "Delete Failed", JOptionPane.ERROR_MESSAGE);
                             }
                         }
-                    } else {
-                        JOptionPane.showMessageDialog(panel, "Employee ID not found.", "Error", JOptionPane.ERROR_MESSAGE);
-                    }
+                } else {
+                    JOptionPane.showMessageDialog(panel,
+                            "Employee ID " + empId + " was not found.",
+                            "Employee Not Found", JOptionPane.ERROR_MESSAGE);
                 }
             }
         });
@@ -323,8 +623,17 @@ public class MotorPH extends JFrame {
         viewAllEmpBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                String report = ExcelRepository.getAllEmployeeProfilesString();
-                showReportWindow("All Employee Roster", HTML_HEADER + report + HTML_FOOTER);
+                if (!ensureWorkbookReady(panel)) {
+                    return;
+                }
+                showReportWithLoading("Loading employee roster...", "All Employee Roster",
+                        new ReportLoader() {
+                            @Override
+                            public String loadReport() {
+                                String report = ExcelRepository.getAllEmployeeProfilesString();
+                                return HTML_HEADER + report + HTML_FOOTER;
+                            }
+                        });
             }
         });
 
@@ -332,13 +641,28 @@ public class MotorPH extends JFrame {
         processOneBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                if (!ensureWorkbookReady(panel)) {
+                    return;
+                }
                 String empId = JOptionPane.showInputDialog(panel, "Enter Employee ID to Process:");
-                if (empId != null && !empId.trim().isEmpty()) {
-                    if (ExcelRepository.checkEmployeeExists(empId)) {
-                        handlePayrollFilterRequest(panel, empId);
-                    } else {
-                        JOptionPane.showMessageDialog(panel, "Employee ID not found.", "Error", JOptionPane.ERROR_MESSAGE);
-                    }
+                if (empId == null) {
+                    return;
+                }
+
+                empId = empId.trim();
+                if (!isValidEmployeeId(empId)) {
+                    JOptionPane.showMessageDialog(panel,
+                            "Employee ID must contain exactly 5 digits.",
+                            "Invalid Employee ID", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+
+                if (ExcelRepository.checkEmployeeExists(empId)) {
+                    handlePayrollFilterRequest(panel, empId);
+                } else {
+                    JOptionPane.showMessageDialog(panel,
+                            "Employee ID " + empId + " was not found.",
+                            "Employee Not Found", JOptionPane.ERROR_MESSAGE);
                 }
             }
         });
@@ -347,6 +671,9 @@ public class MotorPH extends JFrame {
         processAllBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                if (!ensureWorkbookReady(panel)) {
+                    return;
+                }
                 handleBulkPayrollFilterRequest(panel);
             }
         });
@@ -355,15 +682,10 @@ public class MotorPH extends JFrame {
         databaseCheckBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                try {
-                    File file = new File(EXCEL_FILE_PATH);
-                    if (!file.exists()) {
-                        JOptionPane.showMessageDialog(panel, "Excel file not found!", "Error", JOptionPane.ERROR_MESSAGE);
-                    } else {
-                        JOptionPane.showMessageDialog(panel, "Database Connected Successfully!", "Status", JOptionPane.INFORMATION_MESSAGE);
-                    }
-                } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(panel, "Database Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                if (ensureWorkbookReady(panel)) {
+                    JOptionPane.showMessageDialog(panel,
+                            "Excel/XLSX employee data file is ready.",
+                            "Database Status", JOptionPane.INFORMATION_MESSAGE);
                 }
             }
         });
@@ -384,8 +706,7 @@ public class MotorPH extends JFrame {
         navBar.add(roleLabel);
         
         JButton logoutBtn = new JButton("Logout");
-        logoutBtn.setBackground(BTN_ACCENT);
-        logoutBtn.setForeground(TEXT_LIGHT);
+        styleAccentButton(logoutBtn);
         navBar.add(logoutBtn);
         
         panel.add(navBar, BorderLayout.NORTH);
@@ -398,19 +719,13 @@ public class MotorPH extends JFrame {
         Font btnFont = new Font("Arial", Font.PLAIN, 18);
         
         JButton viewProfileBtn = new JButton("View My Profile & Government IDs");
-        viewProfileBtn.setFont(btnFont);
-        viewProfileBtn.setBackground(PANEL_DARK);
-        viewProfileBtn.setForeground(TEXT_LIGHT);
+        styleMenuButton(viewProfileBtn, btnFont, TEXT_LIGHT);
         
         JButton viewPayrollBtn = new JButton("View My Payslips");
-        viewPayrollBtn.setFont(btnFont);
-        viewPayrollBtn.setBackground(PANEL_DARK);
-        viewPayrollBtn.setForeground(TEXT_LIGHT);
+        styleMenuButton(viewPayrollBtn, btnFont, INFO_TEXT);
 
         JButton leaveRequestBtn = new JButton("Apply for Leave Request");
-        leaveRequestBtn.setFont(btnFont);
-        leaveRequestBtn.setBackground(PANEL_DARK);
-        leaveRequestBtn.setForeground(new Color(150, 200, 255)); 
+        styleMenuButton(leaveRequestBtn, btnFont, INFO_TEXT);
 
         buttonPanel.add(viewProfileBtn);
         buttonPanel.add(viewPayrollBtn);
@@ -434,8 +749,18 @@ public class MotorPH extends JFrame {
         viewProfileBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                String profileData = ExcelRepository.getEmployeeProfileString(currentLoggedInEmployeeId);
-                showReportWindow("My Profile Details", HTML_HEADER + profileData + HTML_FOOTER);
+                if (!ensureWorkbookReady(panel)) {
+                    return;
+                }
+                final String employeeId = currentLoggedInEmployeeId;
+                showReportWithLoading("Loading employee profile...", "My Profile Details",
+                        new ReportLoader() {
+                            @Override
+                            public String loadReport() {
+                                String profileData = ExcelRepository.getEmployeeProfileString(employeeId);
+                                return HTML_HEADER + profileData + HTML_FOOTER;
+                            }
+                        });
             }
         });
 
@@ -443,6 +768,9 @@ public class MotorPH extends JFrame {
         viewPayrollBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                if (!ensureWorkbookReady(panel)) {
+                    return;
+                }
                 handlePayrollFilterRequest(panel, currentLoggedInEmployeeId);
             }
         });
@@ -477,9 +805,55 @@ public class MotorPH extends JFrame {
 
         JScrollPane scrollPane = new JScrollPane(editorPane);
         scrollPane.setPreferredSize(new Dimension(1000, 500)); 
-        scrollPane.setBorder(BorderFactory.createLineBorder(BTN_ACCENT));
+        scrollPane.setBorder(BorderFactory.createLineBorder(BORDER_LIGHT));
 
         JOptionPane.showMessageDialog(this, scrollPane, title, JOptionPane.PLAIN_MESSAGE);
+    }
+
+    // Shows a simple loading message while a report is prepared off the Swing event thread.
+    private void showReportWithLoading(String loadingMessage, String reportTitle, ReportLoader loader) {
+        final JDialog loadingDialog = new JDialog(this, "Loading", true);
+        loadingDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+        loadingDialog.setResizable(false);
+
+        JPanel loadingPanel = new JPanel(new BorderLayout(10, 10));
+        loadingPanel.setBackground(PANEL_DARK);
+        loadingPanel.setBorder(BorderFactory.createEmptyBorder(20, 25, 20, 25));
+
+        JLabel loadingLabel = new JLabel(loadingMessage, SwingConstants.CENTER);
+        loadingLabel.setForeground(TEXT_LIGHT);
+        loadingLabel.setFont(new Font("Arial", Font.PLAIN, 15));
+
+        JProgressBar progressBar = new JProgressBar();
+        progressBar.setIndeterminate(true);
+
+        loadingPanel.add(loadingLabel, BorderLayout.CENTER);
+        loadingPanel.add(progressBar, BorderLayout.SOUTH);
+        loadingDialog.add(loadingPanel);
+        loadingDialog.pack();
+        loadingDialog.setLocationRelativeTo(this);
+
+        SwingWorker<String, Void> worker = new SwingWorker<String, Void>() {
+            @Override
+            protected String doInBackground() {
+                return loader.loadReport();
+            }
+
+            @Override
+            protected void done() {
+                loadingDialog.dispose();
+                try {
+                    showReportWindow(reportTitle, get());
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(MotorPH.this,
+                            "Unable to open the report: " + ex.getMessage(),
+                            "Report Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        };
+
+        worker.execute();
+        loadingDialog.setVisible(true);
     }
 
     // Prompts for a date filter and shows the payroll report for one employee.
@@ -497,15 +871,13 @@ public class MotorPH extends JFrame {
         } else if (choice == 2) {
             filter = "PREVIOUS";
         } else if (choice == 3) {
-            filter = JOptionPane.showInputDialog(parentPanel, "Enter Month and Year (Format: MM/YYYY)");
-            if (filter == null || filter.trim().isEmpty()) {
-                return; 
+            filter = promptForPayrollPeriod(parentPanel);
+            if (filter == null) {
+                return;
             }
         } else if (choice != 0) {
             return; 
         }
-        
-        String report = processPayrollLoop(empId, filter);
         
         String windowTitle = "Payroll for ID: " + empId + " (";
         if (filter.equals("ALL")) {
@@ -514,7 +886,15 @@ public class MotorPH extends JFrame {
             windowTitle = windowTitle + filter + ")";
         }
         
-        showReportWindow(windowTitle, HTML_HEADER + report + HTML_FOOTER);
+        final String selectedFilter = filter;
+        showReportWithLoading("Loading employee payroll...", windowTitle,
+                new ReportLoader() {
+                    @Override
+                    public String loadReport() {
+                        String report = processPayrollLoop(empId, selectedFilter);
+                        return HTML_HEADER + report + HTML_FOOTER;
+                    }
+                });
     }
 
     // Prompts for a date filter and shows the payroll report for all employees.
@@ -532,15 +912,13 @@ public class MotorPH extends JFrame {
         } else if (choice == 2) {
             filter = "PREVIOUS";
         } else if (choice == 3) {
-            filter = JOptionPane.showInputDialog(parentPanel, "Enter Month and Year (Format: MM/YYYY)");
-            if (filter == null || filter.trim().isEmpty()) {
+            filter = promptForPayrollPeriod(parentPanel);
+            if (filter == null) {
                 return;
             }
         } else if (choice != 0) {
             return; 
         }
-        
-        String report = processAllEmployees(filter);
         
         String windowTitle = "Company Bulk Payroll Report (";
         if (filter.equals("ALL")) {
@@ -549,7 +927,15 @@ public class MotorPH extends JFrame {
             windowTitle = windowTitle + filter + ")";
         }
         
-        showReportWindow(windowTitle, HTML_HEADER + report + HTML_FOOTER);
+        final String selectedFilter = filter;
+        showReportWithLoading("Loading company payroll summary...", windowTitle,
+                new ReportLoader() {
+                    @Override
+                    public String loadReport() {
+                        String report = processAllEmployees(selectedFilter);
+                        return HTML_HEADER + report + HTML_FOOTER;
+                    }
+                });
     }
 
     // Generates HTML payroll rows for an employee across one or more periods.
@@ -572,7 +958,7 @@ public class MotorPH extends JFrame {
             }
 
             if (row == null) {
-                return "<p style='color:red;'>Employee ID not found.</p>";
+                return "<p style='color:#FCA5A5;'>Employee ID not found.</p>";
             }
 
             // Determine hourly-rate column from header (fallback to column 18).
@@ -614,17 +1000,17 @@ public class MotorPH extends JFrame {
             
             String name = ExcelRepository.getCellValueAsString(row.getCell(2)) + " " + ExcelRepository.getCellValueAsString(row.getCell(1));
             
-            sb.append("<h2 style='color: #4DA6FF; border-bottom: 1px solid #4DA6FF; padding-bottom: 5px;'>Payroll Summary for: [").append(id).append("] ").append(name).append("</h2>");
+            sb.append("<h2 style='color: #93C5FD; border-bottom: 1px solid #93C5FD; padding-bottom: 5px;'>Payroll Summary for: [").append(id).append("] ").append(name).append("</h2>");
             
             if (activePeriods.size() == 0) {
-                sb.append("<p>No attendance records found for this employee in the selected period.</p>");
+                sb.append("<p>No payroll records are available for this employee during the selected period.</p>");
                 return sb.toString();
             }
 
-            sb.append("<table border='1' cellpadding='10' cellspacing='0' style='border-collapse: collapse; width: 100%; border-color: #555;'>");
+            sb.append("<table border='1' cellpadding='10' cellspacing='0' style='border-collapse: collapse; width: 100%; border-color: #64748B;'>");
             
-            sb.append("<tr style='background-color: #2C2C2C; color: #4DA6FF;'>");
-            
+            sb.append("<tr style='background-color: #334155; color: #93C5FD;'>");
+
             sb.append("<th>Period</th><th>1st Cutoff</th><th>1st NET</th><th>2nd Cutoff</th><th>Deductions</th><th>Tax</th><th>2nd NET</th><th>TOTAL NET PAY</th>");
             sb.append("</tr>");
 
@@ -674,18 +1060,18 @@ public class MotorPH extends JFrame {
                     
                     double totalNetPay = net1 + net2;
 
-                    sb.append("<tr style='text-align: center; background-color: #1E1E1E;'>");
+                    sb.append("<tr style='text-align: center; background-color: #172033;'>");
                     sb.append("<td>").append(period).append("</td>");
                     sb.append("<td>").append(String.format("%,.2f", gross1)).append("</td>");
                     sb.append("<td>").append(String.format("%,.2f", net1)).append("</td>");
                     sb.append("<td>").append(String.format("%,.2f", gross2)).append("</td>");
                     
-                    sb.append("<td style='color: #FF6666;'>-").append(String.format("%,.2f", totalGovtDeductions)).append("</td>"); 
-                    sb.append("<td style='color: #FF6666;'>-").append(String.format("%,.2f", tax)).append("</td>"); 
+                    sb.append("<td style='color: #FCA5A5;'>-").append(String.format("%,.2f", totalGovtDeductions)).append("</td>");
+                    sb.append("<td style='color: #FCA5A5;'>-").append(String.format("%,.2f", tax)).append("</td>");
                     
                     sb.append("<td>").append(String.format("%,.2f", net2)).append("</td>");
                     
-                    sb.append("<td style='color: #4CAF50; font-weight: bold;'>").append(String.format("%,.2f", totalNetPay)).append("</td>"); 
+                    sb.append("<td style='color: #86EFAC; font-weight: bold;'>").append(String.format("%,.2f", totalNetPay)).append("</td>");
                     
                     sb.append("</tr>");
                 }
@@ -693,7 +1079,7 @@ public class MotorPH extends JFrame {
             sb.append("</table><br>");
 
         } catch (Exception e) {
-            sb.append("<p style='color:red;'>Error processing payroll records: ").append(e.getMessage()).append("</p>");
+            sb.append("<p style='color:#FCA5A5;'>Error processing payroll records: ").append(e.getMessage()).append("</p>");
         }
         return sb.toString();
     }
@@ -701,27 +1087,189 @@ public class MotorPH extends JFrame {
     // Generates a bulk HTML report for all employees in a period.
     private String processAllEmployees(String periodFilter) {
         StringBuilder sb = new StringBuilder();
+        StringBuilder employeeRows = new StringBuilder();
+
+        int totalEmployeesProcessed = 0;
+        double totalGrossPay = 0.0;
+        double totalDeductions = 0.0;
+        double totalNetPay = 0.0;
+
         try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
              Workbook workbook = new XSSFWorkbook(fis)) {
-            Sheet sheet = workbook.getSheet("Employee Details");
-            for (Row row : sheet) {
+            Sheet empSheet = workbook.getSheet("Employee Details");
+            Sheet attSheet = workbook.getSheet("Attendance Record");
+
+            if (empSheet == null || attSheet == null) {
+                return "<p style='color:#FCA5A5;'>Required payroll sheets were not found in the Excel file.</p>";
+            }
+
+            // Find the hourly-rate column using the same rule as single payroll.
+            int hourlyColIndex = 18;
+            Row headerRow = empSheet.getRow(0);
+            if (headerRow != null) {
+                for (Cell cell : headerRow) {
+                    if (ExcelRepository.getCellValueAsString(cell).toLowerCase().contains("hourly")) {
+                        hourlyColIndex = cell.getColumnIndex();
+                        break;
+                    }
+                }
+            }
+
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+
+            for (Row row : empSheet) {
                 if (row.getRowNum() == 0) {
-                    continue; 
+                    continue;
                 }
+
                 String id = ExcelRepository.getCellValueAsString(row.getCell(0));
-                
-                String report = processPayrollLoop(id, periodFilter);
-                if (!report.contains("No attendance records found")) {
-                    sb.append(report);
+                if (id.isEmpty()) {
+                    continue;
                 }
+
+                List<String> periodsToProcess = getBulkPayrollPeriods(attSheet, id, periodFilter);
+                if (periodsToProcess.isEmpty()) {
+                    continue;
+                }
+
+                String name = ExcelRepository.getCellValueAsString(row.getCell(2)) + " "
+                        + ExcelRepository.getCellValueAsString(row.getCell(1));
+
+                double hourlyRate = ExcelRepository.getNumericSafe(row.getCell(hourlyColIndex), evaluator);
+                if (hourlyRate > 1000) {
+                    hourlyRate = hourlyRate / 160;
+                }
+
+                double basicSalary = ExcelRepository.getNumericSafe(row.getCell(13), evaluator);
+                if (basicSalary <= 0) {
+                    basicSalary = hourlyRate * 160;
+                }
+
+                double employeeHours = 0.0;
+                double employeeGrossPay = 0.0;
+                double employeeDeductions = 0.0;
+                double employeeNetPay = 0.0;
+                boolean hasPayrollRecord = false;
+
+                for (String period : periodsToProcess) {
+                    double h1 = calculateHours(attSheet, id, period, 1, 15);
+                    double h2 = calculateHours(attSheet, id, period, 16, 31);
+                    double periodHours = h1 + h2;
+
+                    if (periodHours <= 0) {
+                        continue;
+                    }
+
+                    hasPayrollRecord = true;
+
+                    // Use the same payroll formulas as the single employee report.
+                    double gross1 = hourlyRate * h1;
+                    double gross2 = hourlyRate * h2;
+                    double periodGrossPay = gross1 + gross2;
+
+                    double sss = PayrollService.calculateSSS(basicSalary);
+                    double philHealth = basicSalary * 0.025;
+                    if (philHealth > 2500.00) {
+                        philHealth = 2500.00;
+                    }
+                    double pagIbig = 200.00;
+
+                    double governmentDeductions = sss + philHealth + pagIbig;
+                    double taxableIncome = periodGrossPay - governmentDeductions;
+                    double tax = PayrollService.calculateTax(taxableIncome);
+
+                    double net1 = gross1;
+                    double net2 = gross2 - (governmentDeductions + tax);
+                    if (net2 < 0) {
+                        net1 = net1 + net2;
+                        net2 = 0;
+                    }
+                    double periodNetPay = net1 + net2;
+
+                    employeeHours = employeeHours + periodHours;
+                    employeeGrossPay = employeeGrossPay + periodGrossPay;
+                    employeeDeductions = employeeDeductions + governmentDeductions + tax;
+                    employeeNetPay = employeeNetPay + periodNetPay;
+                }
+
+                // Employees without usable attendance are not counted as processed.
+                if (!hasPayrollRecord) {
+                    continue;
+                }
+
+                totalEmployeesProcessed = totalEmployeesProcessed + 1;
+                totalGrossPay = totalGrossPay + employeeGrossPay;
+                totalDeductions = totalDeductions + employeeDeductions;
+                totalNetPay = totalNetPay + employeeNetPay;
+
+                employeeRows.append("<tr style='text-align: center; background-color: #172033;'>");
+                employeeRows.append("<td>").append(id).append("</td>");
+                employeeRows.append("<td style='text-align: left;'>").append(name).append("</td>");
+                employeeRows.append("<td>").append(String.format("%,.2f", hourlyRate)).append("</td>");
+                employeeRows.append("<td>").append(String.format("%,.2f", employeeHours)).append("</td>");
+                employeeRows.append("<td>").append(String.format("%,.2f", employeeGrossPay)).append("</td>");
+                employeeRows.append("<td style='color: #FCA5A5;'>").append(String.format("%,.2f", employeeDeductions)).append("</td>");
+                employeeRows.append("<td style='color: #86EFAC; font-weight: bold;'>").append(String.format("%,.2f", employeeNetPay)).append("</td>");
+                employeeRows.append("</tr>");
             }
-            if (sb.toString().trim().isEmpty()) {
-                sb.append("<p>No active payroll records found for the selected timeframe.</p>");
+
+            sb.append("<h2 style='color: #93C5FD; border-bottom: 1px solid #93C5FD; padding-bottom: 5px;'>Company-Wide Payroll Summary</h2>");
+
+            if (totalEmployeesProcessed == 0) {
+                sb.append("<p>No employees were processed because the selected period has no usable payroll or attendance records.</p>");
+                return sb.toString();
             }
+
+            double averageNetPay = totalNetPay / totalEmployeesProcessed;
+
+            sb.append("<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%; border-color: #64748B;'>");
+            sb.append("<tr style='background-color: #334155; color: #93C5FD;'>");
+            sb.append("<th>Total Employees Processed</th><th>Total Gross Pay</th><th>Total Deductions</th><th>Total Net Pay</th><th>Average Net Pay</th>");
+            sb.append("</tr>");
+            sb.append("<tr style='text-align: center; background-color: #172033;'>");
+            sb.append("<td>").append(totalEmployeesProcessed).append("</td>");
+            sb.append("<td>").append(String.format("%,.2f", totalGrossPay)).append("</td>");
+            sb.append("<td style='color: #FCA5A5;'>").append(String.format("%,.2f", totalDeductions)).append("</td>");
+            sb.append("<td style='color: #86EFAC; font-weight: bold;'>").append(String.format("%,.2f", totalNetPay)).append("</td>");
+            sb.append("<td>").append(String.format("%,.2f", averageNetPay)).append("</td>");
+            sb.append("</tr></table><br>");
+
+            sb.append("<h3 style='color: #93C5FD;'>Employee Payroll Records</h3>");
+            sb.append("<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%; border-color: #64748B;'>");
+            sb.append("<tr style='background-color: #334155; color: #93C5FD;'>");
+            sb.append("<th>Employee Number</th><th>Name</th><th>Rate</th><th>Hours Worked</th><th>Gross Pay</th><th>Deductions</th><th>Net Pay</th>");
+            sb.append("</tr>");
+            sb.append(employeeRows);
+            sb.append("</table><br>");
         } catch (Exception e) {
-            sb.append("<p style='color:red;'>Error reading records from the database.</p>");
+            sb.append("<p style='color:#FCA5A5;'>Error processing company payroll: ").append(e.getMessage()).append("</p>");
         }
         return sb.toString();
+    }
+
+    // Selects the payroll periods for one employee in the bulk report.
+    private static List<String> getBulkPayrollPeriods(Sheet sheet, String id, String periodFilter) {
+        List<String> activePeriods = getUniquePeriods(sheet, id);
+        List<String> selectedPeriods = new ArrayList<>();
+        String selectedFilter = periodFilter == null ? "" : periodFilter.trim();
+
+        if (selectedFilter.equals("ALL")) {
+            selectedPeriods.addAll(activePeriods);
+        } else if (selectedFilter.equals("LATEST")) {
+            if (!activePeriods.isEmpty()) {
+                selectedPeriods.add(activePeriods.get(activePeriods.size() - 1));
+            }
+        } else if (selectedFilter.equals("PREVIOUS")) {
+            if (activePeriods.size() > 1) {
+                selectedPeriods.add(activePeriods.get(activePeriods.size() - 2));
+            } else if (activePeriods.size() == 1) {
+                selectedPeriods.add(activePeriods.get(0));
+            }
+        } else if (activePeriods.contains(selectedFilter)) {
+            selectedPeriods.add(selectedFilter);
+        }
+
+        return selectedPeriods;
     }
 
     // Extracts distinct MM/YYYY periods from attendance records.
@@ -740,7 +1288,9 @@ public class MotorPH extends JFrame {
                         String yyyy = parts[2].split(" ")[0]; 
                         periods.add(mm + "/" + yyyy);
                     }
-                } catch (Exception e) {}
+                } catch (Exception ignored) {
+                    // Skip attendance rows with missing or malformed dates.
+                }
             }
         }
         return new ArrayList<>(periods);
@@ -791,7 +1341,9 @@ public class MotorPH extends JFrame {
                             }
                         }
                     }
-                } catch (Exception ex) {}
+                } catch (Exception ignored) {
+                    // Skip attendance rows with invalid dates or times.
+                }
             }
         }
         return total;
@@ -806,8 +1358,8 @@ public class MotorPH extends JFrame {
             } else {
                 return LocalTime.parse(t);
             }
-        } catch (Exception e) { 
-            return LocalTime.of(8, 0); 
+        } catch (Exception ignored) {
+            return LocalTime.of(8, 0);
         }
     }
 
