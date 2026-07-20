@@ -182,7 +182,9 @@ public class ExcelRepository {
                     return true;
                 }
             }
-        } catch (Exception e) {}
+        } catch (Exception ignored) {
+            // A workbook read failure means the employee cannot be confirmed.
+        }
         return false;
     }
 
@@ -243,9 +245,9 @@ public class ExcelRepository {
 
             if (myRow != null) {
                 String idNum      = getCellValueAsString(myRow.getCell(0));
-                String firstName  = getCellValueAsString(myRow.getCell(1));
-                String lastName   = getCellValueAsString(myRow.getCell(2));
-                String fullName   = lastName + " " + firstName;
+                String lastName   = getCellValueAsString(myRow.getCell(1));
+                String firstName  = getCellValueAsString(myRow.getCell(2));
+                String fullName   = firstName + " " + lastName;
                 String birthday   = getCellValueAsString(myRow.getCell(3));
                 String address    = getCellValueAsString(myRow.getCell(4));
                 String phone      = getCellValueAsString(myRow.getCell(5));

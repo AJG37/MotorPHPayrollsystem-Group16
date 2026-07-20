@@ -5,14 +5,16 @@
  * All data is read from and written to a local Excel database.
  */
 
-import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import repository.ExcelRepository;
 import service.PayrollService;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.Font;  
-import java.awt.Color; 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
@@ -26,7 +28,8 @@ import java.util.List;
 import java.util.Set;
 
 // Main Swing application window for the MotorPH payroll system.
-public class MotorPH extends JFrame {
+public final class MotorPH extends JFrame {
+    private static final long serialVersionUID = 1L;
     
     // Card-based navigation between login/admin/employee views.
     private CardLayout cardLayout;
@@ -1285,7 +1288,9 @@ public class MotorPH extends JFrame {
                         String yyyy = parts[2].split(" ")[0]; 
                         periods.add(mm + "/" + yyyy);
                     }
-                } catch (Exception e) {}
+                } catch (Exception ignored) {
+                    // Skip attendance rows with missing or malformed dates.
+                }
             }
         }
         return new ArrayList<>(periods);
@@ -1336,7 +1341,9 @@ public class MotorPH extends JFrame {
                             }
                         }
                     }
-                } catch (Exception ex) {}
+                } catch (Exception ignored) {
+                    // Skip attendance rows with invalid dates or times.
+                }
             }
         }
         return total;
@@ -1351,8 +1358,8 @@ public class MotorPH extends JFrame {
             } else {
                 return LocalTime.parse(t);
             }
-        } catch (Exception e) { 
-            return LocalTime.of(8, 0); 
+        } catch (Exception ignored) {
+            return LocalTime.of(8, 0);
         }
     }
 

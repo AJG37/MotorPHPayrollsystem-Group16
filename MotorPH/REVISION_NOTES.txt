@@ -23,3 +23,20 @@ Batch 4C Update:
 - MotorPH.java now calls ExcelRepository for employee roster and profile retrieval.
 - Confirmed employee roster/profile viewing still works after the move.
 - Payroll loop/report methods were intentionally left in MotorPH.java because they still mix payroll processing and report formatting.
+
+Final Terminal Assessment Updates
+
+- Added and finalized Feature 5: the company-wide payroll summary with aggregate totals and a unified employee payroll table.
+- Improved input validation for employee records. Invalid symbols in employee names and status values are now rejected.
+- Improved error, success, and confirmation messages for clearer user feedback.
+- Clarified data-file loading and workbook-format messages, including required sheets and column order.
+- Improved UI readability and contrast while keeping the existing Swing layout and workflow.
+- Completed code cleanup to remove unnecessary duplication and make intentionally handled cases clearer.
+- Added or updated comments, README content, and revision documentation where helpful.
+- Completed final testing for login, viewing records, add, update, delete, single payroll, company-wide payroll summary, invalid input, duplicate records, and file/period errors.
+
+Data and Structure Notes
+
+- The application uses MotorPH_EmployeeData.xlsx as its data file.
+- Some activity instructions mention CSV, but this implementation uses Excel/XLSX and was not converted to CSV.
+- MotorPH.java still handles the main Swing GUI and workflow. Supporting logic is separated into model, service, and repository classes where practical.
