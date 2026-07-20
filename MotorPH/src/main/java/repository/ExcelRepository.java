@@ -67,7 +67,7 @@ public class ExcelRepository {
                     attendanceSheet, "Attendance Record", ATTENDANCE_RECORD_HEADERS);
         } catch (Exception e) {
             return "Unable to read \"" + EXCEL_FILE_PATH
-                    + "\". Make sure it is a valid Excel/XLSX file and is not damaged.";
+                    + "\". Confirm it is a valid .xlsx workbook and close it in Excel before trying again.";
         }
     }
 
@@ -113,26 +113,38 @@ public class ExcelRepository {
         }
     }
 
-    // Updates the employment status of the employee with the given ID.
-    public static boolean updateEmployeeStatus(String id, String newStatus) {
+    // Updates one of the safe text fields used by the employee update screen.
+    public static boolean updateEmployeeField(String id, int columnIndex, String newValue) {
+        if (columnIndex != 1 && columnIndex != 2 && columnIndex != 10 && columnIndex != 11) {
+            return false;
+        }
+
         try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
              Workbook workbook = new XSSFWorkbook(fis)) {
             Sheet sheet = workbook.getSheet("Employee Details");
             for (Row row : sheet) {
                 if (getCellValueAsString(row.getCell(0)).equals(id)) {
-                    Cell statusCell = row.getCell(10);
-                    if (statusCell == null) statusCell = row.createCell(10);
-                    statusCell.setCellValue(newStatus);
-                    break;
+                    Cell fieldCell = row.getCell(columnIndex);
+                    if (fieldCell == null) {
+                        fieldCell = row.createCell(columnIndex);
+                    }
+                    fieldCell.setCellValue(newValue);
+
+                    try (FileOutputStream fos = new FileOutputStream(new File(EXCEL_FILE_PATH))) {
+                        workbook.write(fos);
+                    }
+                    return true;
                 }
             }
-            try (FileOutputStream fos = new FileOutputStream(new File(EXCEL_FILE_PATH))) {
-                workbook.write(fos);
-            }
-            return true;
+            return false;
         } catch (Exception e) {
             return false;
         }
+    }
+
+    // Retained for callers that only need to update employment status.
+    public static boolean updateEmployeeStatus(String id, String newStatus) {
+        return updateEmployeeField(id, 10, newStatus);
     }
 
     // Deletes the employee row that matches the given ID.
@@ -182,9 +194,9 @@ public class ExcelRepository {
              Workbook workbook = new XSSFWorkbook(fis)) {
             Sheet sheet = workbook.getSheet("Employee Details");
 
-            sb.append("<h2 style='color: #4DA6FF; border-bottom: 1px solid #4DA6FF; padding-bottom: 5px;'>Company Employee Roster</h2>");
-            sb.append("<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%; border-color: #555;'>");
-            sb.append("<tr style='background-color: #2C2C2C; color: #4DA6FF;'>");
+            sb.append("<h2 style='color: #93C5FD; border-bottom: 1px solid #93C5FD; padding-bottom: 5px;'>Company Employee Roster</h2>");
+            sb.append("<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%; border-color: #64748B;'>");
+            sb.append("<tr style='background-color: #334155; color: #93C5FD;'>");
 
             sb.append("<th>ID Number</th><th>Full Name</th><th>Position</th><th>Status</th>");
             sb.append("</tr>");
@@ -199,7 +211,7 @@ public class ExcelRepository {
                 String status = getCellValueAsString(row.getCell(10));
 
                 if (!id.isEmpty()) {
-                    sb.append("<tr style='background-color: #1E1E1E;'>");
+                    sb.append("<tr style='background-color: #172033;'>");
                     sb.append("<td style='text-align: center;'>").append(id).append("</td>");
                     sb.append("<td>").append(name).append("</td>");
                     sb.append("<td>").append(position).append("</td>");
@@ -209,7 +221,7 @@ public class ExcelRepository {
             }
             sb.append("</table>");
         } catch (Exception e) {
-            sb.append("<p style='color:red;'>Error retrieving company roster: ").append(e.getMessage()).append("</p>");
+            sb.append("<p style='color:#FCA5A5;'>Error retrieving company roster: ").append(e.getMessage()).append("</p>");
         }
         return sb.toString();
     }
@@ -246,27 +258,27 @@ public class ExcelRepository {
                 String status     = getCellValueAsString(myRow.getCell(10));
                 String position   = getCellValueAsString(myRow.getCell(11));
 
-                sb.append("<h2 style='color: #4DA6FF; border-bottom: 1px solid #4DA6FF; padding-bottom: 5px;'>Employee Profile Record</h2>");
+                sb.append("<h2 style='color: #93C5FD; border-bottom: 1px solid #93C5FD; padding-bottom: 5px;'>Employee Profile Record</h2>");
                 sb.append("<table border='0' cellpadding='6' style='font-size: 14px;'>");
-                sb.append("<tr><td style='color: #888;'>ID Number:</td><td><b>" + idNum + "</b></td></tr>");
-                sb.append("<tr><td style='color: #888;'>Full Name:</td><td><b>" + fullName + "</b></td></tr>");
-                sb.append("<tr><td style='color: #888;'>Birthday:</td><td>" + birthday + "</td></tr>");
-                sb.append("<tr><td style='color: #888;'>Address:</td><td>" + address + "</td></tr>");
-                sb.append("<tr><td style='color: #888;'>Phone:</td><td>" + phone + "</td></tr>");
-                sb.append("<tr><td colspan='2'><h3 style='color: #4DA6FF; margin-top: 15px;'>Government & Tax IDs</h3></td></tr>");
-                sb.append("<tr><td style='color: #888;'>SSS Number:</td><td>" + sss + "</td></tr>");
-                sb.append("<tr><td style='color: #888;'>PhilHealth No:</td><td>" + philHealth + "</td></tr>");
-                sb.append("<tr><td style='color: #888;'>TIN:</td><td>" + tin + "</td></tr>");
-                sb.append("<tr><td style='color: #888;'>Pag-IBIG No:</td><td>" + pagIbig + "</td></tr>");
-                sb.append("<tr><td colspan='2'><h3 style='color: #4DA6FF; margin-top: 15px;'>Employment Status</h3></td></tr>");
-                sb.append("<tr><td style='color: #888;'>Status:</td><td>" + status + "</td></tr>");
-                sb.append("<tr><td style='color: #888;'>Position:</td><td><b>" + position + "</b></td></tr>");
+                sb.append("<tr><td style='color: #CBD5E1;'>ID Number:</td><td><b>" + idNum + "</b></td></tr>");
+                sb.append("<tr><td style='color: #CBD5E1;'>Full Name:</td><td><b>" + fullName + "</b></td></tr>");
+                sb.append("<tr><td style='color: #CBD5E1;'>Birthday:</td><td>" + birthday + "</td></tr>");
+                sb.append("<tr><td style='color: #CBD5E1;'>Address:</td><td>" + address + "</td></tr>");
+                sb.append("<tr><td style='color: #CBD5E1;'>Phone:</td><td>" + phone + "</td></tr>");
+                sb.append("<tr><td colspan='2'><h3 style='color: #93C5FD; margin-top: 15px;'>Government & Tax IDs</h3></td></tr>");
+                sb.append("<tr><td style='color: #CBD5E1;'>SSS Number:</td><td>" + sss + "</td></tr>");
+                sb.append("<tr><td style='color: #CBD5E1;'>PhilHealth No:</td><td>" + philHealth + "</td></tr>");
+                sb.append("<tr><td style='color: #CBD5E1;'>TIN:</td><td>" + tin + "</td></tr>");
+                sb.append("<tr><td style='color: #CBD5E1;'>Pag-IBIG No:</td><td>" + pagIbig + "</td></tr>");
+                sb.append("<tr><td colspan='2'><h3 style='color: #93C5FD; margin-top: 15px;'>Employment Status</h3></td></tr>");
+                sb.append("<tr><td style='color: #CBD5E1;'>Status:</td><td>" + status + "</td></tr>");
+                sb.append("<tr><td style='color: #CBD5E1;'>Position:</td><td><b>" + position + "</b></td></tr>");
                 sb.append("</table>");
             } else {
-                sb.append("<p style='color:red;'>Employee not found.</p>");
+                sb.append("<p style='color:#FCA5A5;'>Employee not found.</p>");
             }
         } catch (Exception e) {
-            sb.append("<p style='color:red;'>Error retrieving profile: ").append(e.getMessage()).append("</p>");
+            sb.append("<p style='color:#FCA5A5;'>Error retrieving profile: ").append(e.getMessage()).append("</p>");
         }
         return sb.toString();
     }
