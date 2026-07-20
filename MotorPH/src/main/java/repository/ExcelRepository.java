@@ -19,6 +19,78 @@ public class ExcelRepository {
     private static final String EXCEL_FILE_PATH = "MotorPH_EmployeeData.xlsx";
     private static final DataFormatter FORMATTER = new DataFormatter();
 
+    // The application still uses fixed column positions, so these headers must stay in order.
+    private static final String[] EMPLOYEE_DETAILS_HEADERS = {
+        "Employee #", "Last Name", "First Name", "Birthday", "Address",
+        "Phone Number", "SSS #", "Philhealth #", "TIN #", "Pag-ibig #",
+        "Status", "Position", "Immediate Supervisor", "Basic Salary",
+        "Rice Subsidy", "Phone Allowance", "Clothing Allowance",
+        "Gross Semi-monthly Rate", "Hourly Rate"
+    };
+
+    private static final String[] ATTENDANCE_RECORD_HEADERS = {
+        "Employee #", "Last Name", "First Name", "Date", "Log In", "Log Out"
+    };
+
+    // Returns null when the Excel file and its required structure are valid.
+    public static String getWorkbookValidationError() {
+        File file = new File(EXCEL_FILE_PATH);
+
+        if (!file.exists()) {
+            return "Employee data file not found. Expected \"" + EXCEL_FILE_PATH
+                    + "\" in the application folder.";
+        }
+        if (!file.isFile()) {
+            return "The expected employee data path is not a file: \""
+                    + EXCEL_FILE_PATH + "\".";
+        }
+
+        try (FileInputStream fis = new FileInputStream(file);
+             Workbook workbook = new XSSFWorkbook(fis)) {
+            Sheet employeeSheet = workbook.getSheet("Employee Details");
+            Sheet attendanceSheet = workbook.getSheet("Attendance Record");
+
+            if (employeeSheet == null) {
+                return "Invalid Excel/XLSX format. Missing required sheet: \"Employee Details\".";
+            }
+            if (attendanceSheet == null) {
+                return "Invalid Excel/XLSX format. Missing required sheet: \"Attendance Record\".";
+            }
+
+            String employeeHeaderError = validateSheetHeaders(
+                    employeeSheet, "Employee Details", EMPLOYEE_DETAILS_HEADERS);
+            if (employeeHeaderError != null) {
+                return employeeHeaderError;
+            }
+
+            return validateSheetHeaders(
+                    attendanceSheet, "Attendance Record", ATTENDANCE_RECORD_HEADERS);
+        } catch (Exception e) {
+            return "Unable to read \"" + EXCEL_FILE_PATH
+                    + "\". Make sure it is a valid Excel/XLSX file and is not damaged.";
+        }
+    }
+
+    // Checks that required headers remain in the fixed order used by the application.
+    private static String validateSheetHeaders(Sheet sheet, String sheetName, String[] expectedHeaders) {
+        Row headerRow = sheet.getRow(0);
+        if (headerRow == null) {
+            return "Invalid Excel/XLSX format. Sheet \"" + sheetName
+                    + "\" does not contain a header row.";
+        }
+
+        for (int i = 0; i < expectedHeaders.length; i++) {
+            String actualHeader = getCellValueAsString(headerRow.getCell(i));
+            if (!expectedHeaders[i].equalsIgnoreCase(actualHeader)) {
+                return "Invalid column layout in sheet \"" + sheetName
+                        + "\".\nExpected columns in this exact order:\n"
+                        + String.join(", ", expectedHeaders);
+            }
+        }
+
+        return null;
+    }
+
     // Adds a new employee row with a default probationary status.
     public static boolean saveNewEmployee(String id, String fName, String lName) {
         try (FileInputStream fis = new FileInputStream(new File(EXCEL_FILE_PATH));
